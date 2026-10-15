@@ -1,3 +1,121 @@
-'use client';
-import {useState} from 'react';import {useRouter} from 'next/navigation';import {LockKeyhole,LogIn,UserPlus} from 'lucide-react';import {toast} from 'sonner';
-export default function LoginPage(){const [mode,setMode]=useState<'login'|'register'>('login');const [email,setEmail]=useState('');const [password,setPassword]=useState('');const [busy,setBusy]=useState(false);const router=useRouter();const submit=async(e:React.FormEvent)=>{e.preventDefault();setBusy(true);try{const res=await fetch(`/api/auth/${mode==='login'?'login':'register'}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});const data=await res.json();if(!res.ok)throw new Error(data.error||'Permintaan gagal');toast.success(mode==='login'?'Berhasil login':'Akun berhasil dibuat');router.push('/');router.refresh()}catch(e){toast.error(e instanceof Error?e.message:'Terjadi kesalahan')}finally{setBusy(false)}};return <div style={{minHeight:'65vh',display:'grid',placeItems:'center'}}><form className="card" onSubmit={submit} style={{width:'min(440px,100%)'}}><div style={{width:44,height:44,borderRadius:14,background:'#e7f5ec',display:'grid',placeItems:'center',color:'#176b43',marginBottom:18}}><LockKeyhole size={20}/></div><h1 style={{fontSize:24,margin:'0 0 8px'}}>{mode==='login'?'Login Finwise':'Buat akun Finwise'}</h1><p className="muted" style={{lineHeight:1.6,marginBottom:20}}>Akun ini digunakan untuk sinkronisasi cloud. Data lokal tetap tersimpan di browser perangkat ini.</p><div className="field"><label>Email</label><input type="email" required autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)}/></div><div className="field" style={{marginTop:14}}><label>Password {mode==='register'&&'(minimal 10 karakter)'}</label><input type="password" required minLength={mode==='register'?10:1} autoComplete={mode==='login'?'current-password':'new-password'} value={password} onChange={e=>setPassword(e.target.value)}/></div><button className="primary-btn" disabled={busy} style={{width:'100%',marginTop:20}}>{mode==='login'?<LogIn size={15}/>:<UserPlus size={15}/>} {busy?'Memproses…':mode==='login'?'Login':'Daftar akun'}</button><button type="button" className="secondary-btn" style={{width:'100%',marginTop:8}} onClick={()=>setMode(mode==='login'?'register':'login')}>{mode==='login'?'Belum punya akun? Daftar':'Sudah punya akun? Login'}</button><p className="muted" style={{fontSize:11,marginTop:14}}>Membutuhkan PostgreSQL yang sudah dimigrasikan dan SESSION_SECRET.</p></form></div>}
+"use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { LockKeyhole, LogIn, UserPlus } from "lucide-react";
+import { toast } from "sonner";
+export default function LoginPage() {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const router = useRouter();
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const res = await fetch(
+        `/api/auth/${mode === "login" ? "login" : "register"}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Permintaan gagal");
+      toast.success(
+        mode === "login" ? "Berhasil login" : "Akun berhasil dibuat",
+      );
+      router.push("/");
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Terjadi kesalahan");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        padding: 12,
+      }}
+    >
+      <form
+        className="card"
+        onSubmit={submit}
+        style={{ width: "min(440px,100%)" }}
+      >
+        <div
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 14,
+            background: "#e7f5ec",
+            display: "grid",
+            placeItems: "center",
+            color: "#176b43",
+            marginBottom: 18,
+          }}
+        >
+          <LockKeyhole size={20} />
+        </div>
+        <h1 style={{ fontSize: 24, margin: "0 0 8px" }}>
+          {mode === "login" ? "Login Finwise" : "Buat akun Finwise"}
+        </h1>
+        <p className="muted" style={{ lineHeight: 1.6, marginBottom: 20 }}>
+          Akun ini digunakan untuk sinkronisasi cloud. Data lokal tetap
+          tersimpan di browser perangkat ini.
+        </p>
+        <div className="field">
+          <label>Email</label>
+          <input
+            type="email"
+            required
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
+        <div className="field" style={{ marginTop: 14 }}>
+          <label>
+            Password {mode === "register" && "(minimal 10 karakter)"}
+          </label>
+          <input
+            type="password"
+            required
+            minLength={mode === "register" ? 10 : 1}
+            autoComplete={
+              mode === "login" ? "current-password" : "new-password"
+            }
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        <button
+          className="primary-btn"
+          disabled={busy}
+          style={{ width: "100%", marginTop: 20 }}
+        >
+          {mode === "login" ? <LogIn size={15} /> : <UserPlus size={15} />}{" "}
+          {busy ? "Memproses…" : mode === "login" ? "Login" : "Daftar akun"}
+        </button>
+        <button
+          type="button"
+          className="secondary-btn"
+          style={{ width: "100%", marginTop: 8 }}
+          onClick={() => setMode(mode === "login" ? "register" : "login")}
+        >
+          {mode === "login"
+            ? "Belum punya akun? Daftar"
+            : "Sudah punya akun? Login"}
+        </button>
+        <p className="muted" style={{ fontSize: 11, marginTop: 14 }}>
+          Membutuhkan PostgreSQL yang sudah dimigrasikan dan SESSION_SECRET.
+        </p>
+      </form>
+    </div>
+  );
+}
