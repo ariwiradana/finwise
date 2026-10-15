@@ -1,0 +1,10 @@
+{
+  "name": "Finwise Personal Finance",
+  "short_name": "Finwise",
+  "description": "Personal finance management and analytics",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f7f9",
+  "theme_color": "#173b2b",
+  "icons": []
+}
