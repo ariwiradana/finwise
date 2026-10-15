@@ -361,7 +361,7 @@ export default function TransactionsPage() {
                   <th>Kategori</th>
                   <th>Akun</th>
                   <th>Tanggal</th>
-                  <th>Status laporan</th>
+                  <th>Status</th>
                   <th style={{ textAlign: "right" }}>Nominal</th>
                   <th>Aksi</th>
                 </tr>
@@ -377,26 +377,6 @@ export default function TransactionsPage() {
                           gap: 9,
                         }}
                       >
-                        <div
-                          style={{
-                            width: 29,
-                            height: 29,
-                            borderRadius: 9,
-                            display: "grid",
-                            placeItems: "center",
-                            background:
-                              t.type === "income" ? "#e7f5ec" : "#f1f2f4",
-                            color: t.type === "income" ? "#187343" : "#59616b",
-                          }}
-                        >
-                          {t.type === "income" ? (
-                            <ArrowDownLeft size={14} />
-                          ) : t.type === "transfer" ? (
-                            <ArrowLeftRight size={14} />
-                          ) : (
-                            <ArrowUpRight size={14} />
-                          )}
-                        </div>
                         <div>
                           <div style={{ fontWeight: 700 }}>{t.description}</div>
                           {t.note && (
@@ -605,6 +585,7 @@ export default function TransactionsPage() {
                 <div className="field">
                   <label>Tanggal</label>
                   <input
+                    className="w-full"
                     required
                     type="date"
                     value={date}
