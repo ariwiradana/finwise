@@ -1217,6 +1217,8 @@ export default function TransactionsPage() {
             alignItems: "center",
             justifyContent: "center",
             padding: 16,
+            overflowX: "hidden",
+            boxSizing: "border-box",
           }}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
@@ -1228,9 +1230,14 @@ export default function TransactionsPage() {
           <div
             className="card"
             style={{
-              width: "min(720px,100%)",
+              width: "min(720px, calc(100vw - 32px))",
+              maxWidth: "100%",
+              minWidth: 0,
+              boxSizing: "border-box",
               maxHeight: "90vh",
               overflowY: "auto",
+              overflowX: "hidden",
+              overscrollBehaviorX: "none",
               boxShadow: "0 25px 90px #0002",
             }}
           >
@@ -1252,7 +1259,16 @@ export default function TransactionsPage() {
                 <X size={15} />
               </button>
             </div>
-            <form onSubmit={submit} style={{ display: "grid", gap: 17 }}>
+            <form
+              onSubmit={submit}
+              style={{
+                display: "grid",
+                gap: 17,
+                minWidth: 0,
+                width: "100%",
+                boxSizing: "border-box",
+              }}
+            >
               <div
                 style={{
                   display: "flex",
