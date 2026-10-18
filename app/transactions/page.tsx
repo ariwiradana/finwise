@@ -10,6 +10,14 @@ import {
   SlidersHorizontal,
   Trash2,
   X,
+  TrendingUp,
+  TrendingDown,
+  RotateCcw,
+  Wallet,
+  CreditCard,
+  HandCoins,
+  Clock3,
+  FileMinus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatIDR } from "@/lib/finance/money";
@@ -44,22 +52,31 @@ export default function TransactionsPage() {
             ? ["allocation", "alokasi"].includes(v)
             : ["expense", "pengeluaran"].includes(v);
     });
+
   const categoryOptions = (txType: TxType) => {
-    const found = categoriesFor(txType).map((c) => c.name);
-    return found.length
-      ? found
-      : DEFAULT_CATEGORIES.filter(
-          (c) =>
-            c.type ===
-            (["income", "receivable_payment"].includes(txType)
-              ? "income"
-              : txType === "transfer"
-                ? "transfer"
-                : txType === "reimburse_payment"
-                  ? "allocation"
-                  : "expense"),
-        ).map((c) => c.name);
+    const categoryType = ["income", "receivable_payment"].includes(txType)
+      ? "income"
+      : txType === "transfer"
+        ? "transfer"
+        : txType === "reimburse_payment"
+          ? "allocation"
+          : "expense";
+
+    const defaults = DEFAULT_CATEGORIES.filter(
+      (c) => c.type === categoryType,
+    ).map((c) => c.name);
+
+    const saved = categoriesFor(txType).map((c) => c.name);
+
+    const options = Array.from(new Set([...defaults, ...saved]));
+
+    if (txType === "income" && !options.includes("Reimburse")) {
+      options.push("Reimburse");
+    }
+
+    return options;
   };
+
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
@@ -69,7 +86,7 @@ export default function TransactionsPage() {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("Makan & Minum");
-  const [account, setAccount] = useState("Bank utama");
+  const [account, setAccount] = useState("");
   const [excluded, setExcluded] = useState(false);
   const [note, setNote] = useState("");
   const [tagText, setTagText] = useState("");
@@ -85,27 +102,53 @@ export default function TransactionsPage() {
   const visible = useMemo(
     () =>
       transactions.filter((t) => {
-        const q = query.toLowerCase();
+        const q = query.trim().toLocaleLowerCase("id-ID");
+        const txType = String(t.type).trim().toLowerCase();
+
         const matchesQuery = [
           t.description,
           t.category,
           t.account,
           t.note ?? "",
           ...t.tags,
-        ].some((v) => v.toLowerCase().includes(q));
-        const matchesFilter =
-          filter === "all" ||
-          (filter === "excluded"
-            ? t.excludedFromReports
-            : filter === "reimburse"
-              ? t.reimburseStatus === "pending"
-              : filter === "income"
-                ? t.type === "income"
-                : filter === "expense"
-                  ? ["expense", "asset_purchase", "debt_payment"].includes(
-                      t.type,
-                    )
-                  : t.type === filter);
+        ].some((value) => String(value).toLocaleLowerCase("id-ID").includes(q));
+
+        // Filter tipe transaksi terpisah dari status laporan.
+        // "Masuk laporan" bukan berarti transaksi tersebut adalah pemasukan.
+        let matchesFilter = true;
+
+        switch (filter) {
+          case "all":
+            matchesFilter = true;
+            break;
+          case "excluded":
+            matchesFilter = Boolean(t.excludedFromReports);
+            break;
+          case "included":
+            matchesFilter = !t.excludedFromReports;
+            break;
+          case "reimburse":
+            matchesFilter = t.reimburseStatus === "pending";
+            break;
+          case "income":
+            matchesFilter = ["income", "pemasukan"].includes(txType);
+            break;
+          case "expense":
+            matchesFilter = [
+              "expense",
+              "pengeluaran",
+              "asset_purchase",
+              "debt_payment",
+            ].includes(txType);
+            break;
+          case "transfer":
+            matchesFilter = txType === "transfer";
+            break;
+          default:
+            matchesFilter = txType === filter;
+            break;
+        }
+
         return matchesQuery && matchesFilter;
       }),
     [transactions, query, filter],
@@ -116,7 +159,7 @@ export default function TransactionsPage() {
     setAmount("");
     setDescription("");
     setCategory("Makan & Minum");
-    setAccount("Bank utama");
+    setAccount("");
     setExcluded(false);
     setNote("");
     setTagText("");
@@ -334,7 +377,8 @@ export default function TransactionsPage() {
               <option value="income">Pemasukan</option>
               <option value="expense">Pengeluaran</option>
               <option value="transfer">Transfer</option>
-              <option value="excluded">Dikecualikan</option>
+              <option value="included">Masuk laporan</option>
+              <option value="excluded">Dikecualikan dari laporan</option>
               <option value="reimburse">Menunggu reimburse</option>
             </select>
           </div>
@@ -361,7 +405,7 @@ export default function TransactionsPage() {
                   <th>Kategori</th>
                   <th>Akun</th>
                   <th>Tanggal</th>
-                  <th>Status</th>
+                  <th>Jenis / Status</th>
                   <th style={{ textAlign: "right" }}>Nominal</th>
                   <th>Aksi</th>
                 </tr>
@@ -384,13 +428,6 @@ export default function TransactionsPage() {
                               {t.note}
                             </div>
                           )}
-                          {t.reimburseStatus === "pending" && (
-                            <div style={{ marginTop: 4 }}>
-                              <span className="badge amber">
-                                Menunggu reimburse
-                              </span>
-                            </div>
-                          )}
                         </div>
                       </div>
                     </td>
@@ -398,11 +435,140 @@ export default function TransactionsPage() {
                     <td>{t.account}</td>
                     <td>{new Date(t.date).toLocaleDateString("id-ID")}</td>
                     <td>
-                      {t.excludedFromReports ? (
-                        <span className="badge amber">Dikecualikan</span>
-                      ) : (
-                        <span className="badge green">Masuk laporan</span>
-                      )}
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 5,
+                          alignItems: "center",
+                        }}
+                      >
+                        {(() => {
+                          const typeBadge: Record<
+                            string,
+                            {
+                              label: string;
+                              color: string;
+                              background: string;
+                              icon: React.ReactNode;
+                            }
+                          > = {
+                            income: {
+                              label: "Pemasukan",
+                              color: "#187443",
+                              background: "#E5F5EB",
+                              icon: <TrendingUp size={12} />,
+                            },
+                            expense: {
+                              label: "Pengeluaran",
+                              color: "#B42318",
+                              background: "#FDEAEA",
+                              icon: <TrendingDown size={12} />,
+                            },
+                            transfer: {
+                              label: "Transfer",
+                              color: "#2458A6",
+                              background: "#E8F0FE",
+                              icon: <ArrowLeftRight size={12} />,
+                            },
+                            refund: {
+                              label: "Refund",
+                              color: "#087E70",
+                              background: "#E0F7F3",
+                              icon: <RotateCcw size={12} />,
+                            },
+                            asset_purchase: {
+                              label: "Pembelian aset",
+                              color: "#6941C6",
+                              background: "#F0EAFE",
+                              icon: <Wallet size={12} />,
+                            },
+                            debt_payment: {
+                              label: "Pembayaran utang",
+                              color: "#9A5B00",
+                              background: "#FFF0D6",
+                              icon: <CreditCard size={12} />,
+                            },
+                            receivable_payment: {
+                              label: "Penerimaan piutang",
+                              color: "#087E70",
+                              background: "#E0F7F3",
+                              icon: <HandCoins size={12} />,
+                            },
+                            reimburse_payment: {
+                              label: "Pembayaran reimburse",
+                              color: "#2458A6",
+                              background: "#E8F0FE",
+                              icon: <Wallet size={12} />,
+                            },
+                            adjustment: {
+                              label: "Penyesuaian",
+                              color: "#596579",
+                              background: "#EEF1F5",
+                              icon: <SlidersHorizontal size={12} />,
+                            },
+                          };
+
+                          const badge = typeBadge[t.type] ?? {
+                            label: t.type,
+                            color: "#596579",
+                            background: "#EEF1F5",
+                            icon: <ArrowLeftRight size={12} />,
+                          };
+
+                          return (
+                            <span
+                              className="badge"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 5,
+                                color: badge.color,
+                                background: badge.background,
+                                border: "1px solid transparent",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {badge.icon}
+                              {badge.label}
+                            </span>
+                          );
+                        })()}
+
+                        {t.reimburseStatus === "pending" && (
+                          <span
+                            className="badge"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              color: "#9A5B00",
+                              background: "#FFF0D6",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            <Clock3 size={12} />
+                            Menunggu reimburse
+                          </span>
+                        )}
+
+                        {t.excludedFromReports && (
+                          <span
+                            className="badge"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              color: "#9A5B00",
+                              background: "#FFF0D6",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            <FileMinus size={12} />
+                            Dikecualikan dari laporan
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td
                       style={{
@@ -574,12 +740,17 @@ export default function TransactionsPage() {
                   <input
                     required
                     inputMode="numeric"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="Contoh: 2000000"
+                    type="text"
+                    value={
+                      amount === ""
+                        ? ""
+                        : Number(amount).toLocaleString("id-ID")
+                    }
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "");
+                      setAmount(value);
+                    }}
+                    placeholder="Contoh: 2.000.000"
                   />
                 </div>
                 <div className="field">
@@ -616,13 +787,23 @@ export default function TransactionsPage() {
                 <div className="field">
                   <label>Akun</label>
                   <select
+                    required
                     value={account}
                     onChange={(e) => setAccount(e.target.value)}
                   >
+                    <option value="" disabled>
+                      Pilih akun
+                    </option>
                     {accountOptions.length
-                      ? accountOptions.map((a) => <option key={a}>{a}</option>)
+                      ? accountOptions.map((a) => (
+                          <option key={a} value={a}>
+                            {a}
+                          </option>
+                        ))
                       : ["Bank utama", "Cash"].map((a) => (
-                          <option key={a}>{a}</option>
+                          <option key={a} value={a}>
+                            {a}
+                          </option>
                         ))}
                   </select>
                 </div>
@@ -700,97 +881,238 @@ export default function TransactionsPage() {
                 />{" "}
                 Bagi transaksi ke beberapa kategori
               </label>
+
               {splitEnabled && (
                 <div
                   style={{
                     border: "1px solid #e4e7ea",
                     borderRadius: 10,
-                    padding: 12,
+                    padding: 14,
                     display: "grid",
-                    gap: 10,
+                    gap: 14,
                   }}
                 >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 12,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>
+                        Rincian transaksi
+                      </div>
+                      <div
+                        className="muted"
+                        style={{ fontSize: 12, marginTop: 4 }}
+                      >
+                        Bagi nominal ke beberapa kategori.
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      style={{ whiteSpace: "nowrap" }}
+                      onClick={() =>
+                        setSplitRows((a) => [
+                          ...a,
+                          { category: "Lainnya", amount: "", note: "" },
+                        ])
+                      }
+                    >
+                      <CirclePlus size={14} />
+                      Tambah
+                    </button>
+                  </div>
+
+                  {splitRows.length === 0 && (
+                    <div
+                      className="empty"
+                      style={{
+                        border: "1px dashed #d5dbe0",
+                        borderRadius: 9,
+                        padding: 18,
+                        fontSize: 12,
+                      }}
+                    >
+                      Belum ada rincian transaksi.
+                      <div style={{ marginTop: 4 }}>
+                        Tekan Tambah untuk menambahkan kategori.
+                      </div>
+                    </div>
+                  )}
+
                   {splitRows.map((row, i) => (
                     <div
                       key={i}
                       style={{
+                        border: "1px solid #e4e7ea",
+                        borderRadius: 9,
+                        padding: 12,
                         display: "grid",
-                        gridTemplateColumns: "1.2fr .8fr 1fr auto",
-                        gap: 7,
-                        alignItems: "center",
+                        gap: 12,
                       }}
                     >
-                      <select
-                        value={row.category}
-                        onChange={(e) =>
-                          setSplitRows((a) =>
-                            a.map((x, j) =>
-                              j === i ? { ...x, category: e.target.value } : x,
-                            ),
-                          )
-                        }
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
                       >
-                        {categoryOptions("expense").map((c) => (
-                          <option key={c}>{c}</option>
-                        ))}
-                      </select>
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        placeholder="Nominal"
-                        value={row.amount}
-                        onChange={(e) =>
-                          setSplitRows((a) =>
-                            a.map((x, j) =>
-                              j === i ? { ...x, amount: e.target.value } : x,
-                            ),
-                          )
-                        }
-                      />
-                      <input
-                        placeholder="Catatan (opsional)"
-                        value={row.note}
-                        onChange={(e) =>
-                          setSplitRows((a) =>
-                            a.map((x, j) =>
-                              j === i ? { ...x, note: e.target.value } : x,
-                            ),
-                          )
-                        }
-                      />
-                      <button
-                        type="button"
-                        className="secondary-btn"
-                        onClick={() =>
-                          setSplitRows((a) => a.filter((_, j) => j !== i))
-                        }
-                      >
-                        ×
-                      </button>
+                        <span
+                          className="muted"
+                          style={{ fontSize: 12, fontWeight: 600 }}
+                        >
+                          Rincian {i + 1}
+                        </span>
+
+                        <button
+                          type="button"
+                          className="secondary-btn"
+                          aria-label={`Hapus rincian ${i + 1}`}
+                          style={{ padding: "5px 8px" }}
+                          onClick={() =>
+                            setSplitRows((a) => a.filter((_, j) => j !== i))
+                          }
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+
+                      <div className="field">
+                        <label>Kategori</label>
+                        <select
+                          value={row.category}
+                          onChange={(e) =>
+                            setSplitRows((a) =>
+                              a.map((x, j) =>
+                                j === i
+                                  ? { ...x, category: e.target.value }
+                                  : x,
+                              ),
+                            )
+                          }
+                        >
+                          {categoryOptions("expense").map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="form-grid">
+                        <div className="field">
+                          <label>Nominal (Rp)</label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="Contoh: 500.000"
+                            value={
+                              row.amount === ""
+                                ? ""
+                                : Number(row.amount).toLocaleString("id-ID")
+                            }
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, "");
+                              setSplitRows((a) =>
+                                a.map((x, j) =>
+                                  j === i ? { ...x, amount: value } : x,
+                                ),
+                              );
+                            }}
+                          />
+                        </div>
+
+                        <div className="field">
+                          <label>Catatan (opsional)</label>
+                          <input
+                            type="text"
+                            placeholder="Contoh: Makan siang"
+                            value={row.note}
+                            onChange={(e) =>
+                              setSplitRows((a) =>
+                                a.map((x, j) =>
+                                  j === i ? { ...x, note: e.target.value } : x,
+                                ),
+                              )
+                            }
+                          />
+                        </div>
+                      </div>
                     </div>
                   ))}
-                  <button
-                    type="button"
-                    className="secondary-btn"
-                    onClick={() =>
-                      setSplitRows((a) => [
-                        ...a,
-                        { category: "Lainnya", amount: "", note: "" },
-                      ])
-                    }
+
+                  <div
+                    style={{
+                      borderTop: "1px solid #e4e7ea",
+                      paddingTop: 12,
+                      display: "grid",
+                      gap: 10,
+                    }}
                   >
-                    Tambah baris split
-                  </button>
-                  <div className="muted">
-                    Total split:{" "}
-                    {formatIDR(
-                      splitRows.reduce((s, x) => s + Number(x.amount || 0), 0),
-                    )}{" "}
-                    / {formatIDR(Number(amount || 0))}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 12,
+                      }}
+                    >
+                      <span className="muted" style={{ fontSize: 12 }}>
+                        Total split
+                      </span>
+                      <strong style={{ fontSize: 14 }}>
+                        {formatIDR(
+                          splitRows.reduce(
+                            (sum, row) => sum + Number(row.amount || 0),
+                            0,
+                          ),
+                        )}
+                      </strong>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 12,
+                      }}
+                    >
+                      <span className="muted" style={{ fontSize: 12 }}>
+                        Total transaksi
+                      </span>
+                      <strong style={{ fontSize: 14 }}>
+                        {formatIDR(Number(amount || 0))}
+                      </strong>
+                    </div>
+
+                    {splitRows.reduce(
+                      (sum, row) => sum + Number(row.amount || 0),
+                      0,
+                    ) !== Number(amount || 0) && (
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "#b54708",
+                          background: "#fffaeb",
+                          borderRadius: 8,
+                          padding: 10,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        Total split belum sama dengan nominal transaksi.
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
+
               <div className="field">
                 <label>Catatan</label>
                 <textarea

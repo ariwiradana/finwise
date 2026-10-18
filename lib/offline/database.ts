@@ -112,6 +112,7 @@ export const DEFAULT_CATEGORIES = [
   { name: "Gaji", type: "income" },
   { name: "Freelance", type: "income" },
   { name: "Bonus", type: "income" },
+  { name: "Reimburse", type: "income" },
   { name: "Investasi masuk", type: "income" },
   { name: "Makan & Minum", type: "expense" },
   { name: "Transportasi", type: "expense" },
