@@ -826,7 +826,6 @@ export default function TransactionsPage() {
         ref={receiptInputRef}
         type="file"
         accept="image/*,application/pdf,.pdf"
-        capture="environment"
         hidden
         onChange={(e) => void handleReceiptUpload(e.target.files?.[0])}
       />
