@@ -462,8 +462,10 @@ export default function DashboardPage() {
           <div className="section-title">
             <h2>Transaksi terbaru</h2>
             <Link href="/transactions" className="muted">
-              Lihat semua{" "}
-              <ChevronRight size={13} style={{ verticalAlign: "middle" }} />
+              <div className="flex items-center">
+                Lihat semua{" "}
+                <ChevronRight size={16} style={{ verticalAlign: "middle" }} />
+              </div>
             </Link>
           </div>
           {!ready ? (
