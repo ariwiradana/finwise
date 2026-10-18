@@ -405,7 +405,7 @@ export default function TransactionsPage() {
                   <th>Kategori</th>
                   <th>Akun</th>
                   <th>Tanggal</th>
-                  <th>Jenis / Status</th>
+                  <th>Status</th>
                   <th style={{ textAlign: "right" }}>Nominal</th>
                   <th>Aksi</th>
                 </tr>
