@@ -1,5 +1,5 @@
 "use client";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useRef, useState } from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -18,6 +18,10 @@ import {
   HandCoins,
   Clock3,
   FileMinus,
+  ReceiptText,
+  Upload,
+  Camera,
+  LoaderCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatIDR } from "@/lib/finance/money";
@@ -78,6 +82,8 @@ export default function TransactionsPage() {
   };
 
   const [showForm, setShowForm] = useState(false);
+  const [receiptProcessing, setReceiptProcessing] = useState(false);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -198,6 +204,542 @@ export default function TransactionsPage() {
     );
     setShowForm(true);
   };
+
+  const handleReceiptUpload = async (file?: File) => {
+    if (!file) return;
+
+    setShowForm(true);
+
+    const isPdf =
+      file.type === "application/pdf" ||
+      file.name.toLowerCase().endsWith(".pdf");
+    const isImage = file.type.startsWith("image/");
+    if (!isPdf && !isImage) {
+      toast.error("Format file harus berupa foto atau PDF.");
+      return;
+    }
+
+    setReceiptProcessing(true);
+
+    const applyReceiptData = (result: {
+      merchant?: unknown;
+      date?: unknown;
+      totalAmount?: unknown;
+      extractedText?: unknown;
+      confidence?: unknown;
+      accountSuggestion?: unknown;
+      categorySuggestion?: unknown;
+      transactionTypeSuggestion?: unknown;
+      tags?: unknown;
+    }) => {
+      const merchant =
+        typeof result.merchant === "string" ? result.merchant.trim() : "";
+      const amountValue = Number(result.totalAmount);
+      const detectedAmount =
+        Number.isSafeInteger(amountValue) && amountValue > 0 ? amountValue : 0;
+      const dateValue =
+        typeof result.date === "string" ? result.date.trim() : "";
+      const detectedDate =
+        /^\d{4}-\d{2}-\d{2}$/.test(dateValue) &&
+        !Number.isNaN(new Date(`${dateValue}T12:00:00`).getTime()) &&
+        new Date(`${dateValue}T12:00:00`).toISOString().slice(0, 10) ===
+          dateValue
+          ? dateValue
+          : "";
+      const extractedText =
+        typeof result.extractedText === "string"
+          ? result.extractedText.trim()
+          : "";
+
+      const supportedTypes: TxType[] = [
+        "income",
+        "expense",
+        "transfer",
+        "refund",
+        "asset_purchase",
+        "debt_payment",
+        "receivable_payment",
+        "reimburse_payment",
+        "adjustment",
+      ];
+      const suggestedType =
+        typeof result.transactionTypeSuggestion === "string" &&
+        supportedTypes.includes(result.transactionTypeSuggestion as TxType)
+          ? (result.transactionTypeSuggestion as TxType)
+          : "expense";
+      setType(suggestedType);
+      if (detectedAmount) setAmount(String(detectedAmount));
+      if (detectedDate) setDate(detectedDate);
+      if (merchant) {
+        const descriptionPrefix =
+          suggestedType === "income" || suggestedType === "receivable_payment"
+            ? "Penerimaan - "
+            : suggestedType === "transfer"
+              ? "Transfer - "
+              : suggestedType === "refund"
+                ? "Refund - "
+                : suggestedType === "asset_purchase"
+                  ? "Pembelian aset - "
+                  : "Pembelian - ";
+        setDescription(`${descriptionPrefix}${merchant}`.slice(0, 240));
+      }
+      const suggestedCategories = categoryOptions(suggestedType);
+      const aiCategory =
+        typeof result.categorySuggestion === "string" &&
+        suggestedCategories.includes(result.categorySuggestion)
+          ? result.categorySuggestion
+          : "";
+      const expenseCategories = categoryOptions("expense");
+      const categoryEvidence = `${merchant} ${extractedText}`.toLocaleLowerCase(
+        "id-ID",
+      );
+      const categoryRules: [RegExp, string[]][] = [
+        [
+          /cuci motor|cuci mobil|car wash|motor wash|salon motor|bengkel|service motor|servis motor|ganti oli|spare ?part|tambal ban|ban motor|parkir|bensin|bbm|pertamina|shell|spbu|tol\b|grab|gojek|taksi|taxi|ojek|bus|kereta|transport/i,
+          ["Transportasi"],
+        ],
+        [
+          /restoran|restaurant|rumah makan|warung|cafe|café|coffee|kopi|bakery|roti|boba|minuman|makan|food|dining|pizza|burger|sushi|ayam geprek|warteg/i,
+          ["Makan & Minum"],
+        ],
+        [
+          /indomaret|alfamart|supermarket|superindo|hypermart|minimarket|grocery|sembako|sayur|buah|pasar/i,
+          ["Belanja", "Belanja Harian"],
+        ],
+        [
+          /apotek|pharmacy|klinik|clinic|hospital|rumah sakit|dokter|obat|lab kesehatan/i,
+          ["Kesehatan"],
+        ],
+        [
+          /pln|listrik|token listrik|pdam|air\s?\b|internet|wifi|wi-fi|telkom|indihome|pulsa|paket data|tagihan/i,
+          ["Tagihan"],
+        ],
+        [
+          /bioskop|cinema|netflix|spotify|game|steam|karaoke|konser|hiburan/i,
+          ["Hiburan"],
+        ],
+        [
+          /laundry|binatu|dry clean|dryclean/i,
+          ["Rumah Tangga", "Belanja", "Lainnya"],
+        ],
+        [
+          /sekolah|kursus|training|buku|alat tulis/i,
+          ["Pendidikan", "Pekerjaan", "Lainnya"],
+        ],
+      ];
+      const matchedCategoryNames =
+        categoryRules.find(([pattern]) =>
+          pattern.test(categoryEvidence),
+        )?.[1] ?? [];
+      const inferredExpenseCategory = matchedCategoryNames.find((name) =>
+        expenseCategories.includes(name),
+      );
+      const historyMerchant = merchant.toLocaleLowerCase("id-ID");
+      const historyCategory = historyMerchant
+        ? transactions.find((tx) => {
+            const oldDescription = tx.description
+              .toLocaleLowerCase("id-ID")
+              .replace(
+                /^(pembelian|pembelian aset|penerimaan|transfer|refund)\s*-\s*/i,
+                "",
+              );
+            return (
+              oldDescription.includes(historyMerchant) ||
+              historyMerchant.includes(oldDescription)
+            );
+          })?.category
+        : undefined;
+      const validHistoryCategory =
+        historyCategory && suggestedCategories.includes(historyCategory)
+          ? historyCategory
+          : "";
+      const defaultCategory = suggestedCategories.includes("Lainnya")
+        ? "Lainnya"
+        : (suggestedCategories[0] ?? "Lainnya");
+      const inferredCategory =
+        suggestedType === "expense" || suggestedType === "asset_purchase"
+          ? inferredExpenseCategory
+          : "";
+      setCategory(
+        aiCategory ||
+          inferredCategory ||
+          validHistoryCategory ||
+          defaultCategory,
+      );
+
+      // Account cannot be read from the receipt itself. Prefer a valid AI suggestion,
+      // then reuse the account used for a previous transaction at the same merchant,
+      // and finally preselect the first available account for user review.
+      const availableAccounts = accountOptions.length
+        ? accountOptions
+        : ["Bank utama", "Cash"];
+      const suggestedAccount =
+        typeof result.accountSuggestion === "string" &&
+        availableAccounts.includes(result.accountSuggestion)
+          ? result.accountSuggestion
+          : "";
+      const merchantKey = merchant.toLocaleLowerCase("id-ID");
+      const previousMerchantTransaction = merchantKey
+        ? transactions.find(
+            (tx) =>
+              tx.description.toLocaleLowerCase("id-ID").includes(merchantKey) ||
+              merchantKey.includes(
+                tx.description
+                  .replace(/^pembelian\s*-\s*/i, "")
+                  .toLocaleLowerCase("id-ID"),
+              ),
+          )
+        : undefined;
+      const historyAccount =
+        previousMerchantTransaction &&
+        availableAccounts.includes(previousMerchantTransaction.account)
+          ? previousMerchantTransaction.account
+          : "";
+      const selectedAccount =
+        suggestedAccount || historyAccount || availableAccounts[0] || "";
+      setAccount(selectedAccount);
+      if (suggestedType === "transfer") {
+        const suggestedDestination = availableAccounts.find(
+          (name) => name !== selectedAccount,
+        );
+        if (suggestedDestination) setDestinationAccount(suggestedDestination);
+      }
+
+      const suggestedTags = Array.isArray(result.tags)
+        ? Array.from(
+            new Set(
+              result.tags
+                .filter((tag): tag is string => typeof tag === "string")
+                .map((tag) =>
+                  tag.trim().toLocaleLowerCase("id-ID").replace(/^#/, ""),
+                )
+                .filter((tag) => tag.length > 0 && tag.length <= 32),
+            ),
+          ).slice(0, 5)
+        : [];
+      const receiptText = `${merchant} ${extractedText}`.toLocaleLowerCase(
+        "id-ID",
+      );
+      const inferredTags = suggestedTags.length
+        ? suggestedTags
+        : (() => {
+            const tags: string[] = [];
+            if (
+              /kopi|coffee|cafe|café|resto|restaurant|makan|food|warung|bakery|boba|minuman/.test(
+                receiptText,
+              )
+            )
+              tags.push("makan-minum");
+            if (
+              /bensin|pertamina|shell|spbu|parkir|grab|gojek|transport|toll|tol/.test(
+                receiptText,
+              )
+            )
+              tags.push("transportasi");
+            if (
+              /indomaret|alfamart|supermarket|grocery|superindo|hypermart|sayur|sembako/.test(
+                receiptText,
+              )
+            )
+              tags.push("belanja-harian");
+            if (
+              /apotek|pharmacy|klinik|hospital|rumah sakit|obat/.test(
+                receiptText,
+              )
+            )
+              tags.push("kesehatan");
+            if (!tags.length && merchant)
+              tags.push(
+                merchant
+                  .toLocaleLowerCase("id-ID")
+                  .replace(/[^\p{L}\p{N}]+/gu, "-")
+                  .replace(/^-|-$/g, "")
+                  .slice(0, 32),
+              );
+            return tags.filter(Boolean).slice(0, 5);
+          })();
+      if (inferredTags.length) setTagText(inferredTags.join(", "));
+
+      if (extractedText) {
+        setNote((current) =>
+          current.trim()
+            ? `${current}\n\nTeks hasil ekstraksi nota:\n${extractedText.slice(0, 2500)}`
+            : `Teks hasil ekstraksi nota:\n${extractedText.slice(0, 2500)}`,
+        );
+      } else {
+        setNote((current) =>
+          current.trim()
+            ? `${current}\n\nNota diproses dengan AI. Periksa kembali hasil ekstraksi sebelum menyimpan.`
+            : "Nota diproses dengan AI. Periksa kembali hasil ekstraksi sebelum menyimpan.",
+        );
+      }
+
+      return {
+        detectedAmount,
+        detectedDate,
+        merchant,
+      };
+    };
+
+    const parseAmount = (value: string) => {
+      const cleaned = value.replace(/[^\d.,]/g, "");
+      if (!cleaned) return 0;
+      const digits = cleaned
+        .replace(/[.,](?=\d{3}(?:\D|$))/g, "")
+        .replace(/[.,]/g, "");
+      const number = Number(digits);
+      return Number.isSafeInteger(number) ? number : 0;
+    };
+
+    const parseLocalOcrText = (text: string) => {
+      const lines = text
+        .split(/\r?\n/)
+        .map((line) => line.replace(/\s+/g, " ").trim())
+        .filter(Boolean);
+
+      const totalKeywords =
+        /(?:grand\s*total|total\s*bayar|total\s*belanja|jumlah\s*bayar|total\s*tagihan|amount\s*due|amount\s*paid|total|jumlah)/i;
+      let detectedAmount = 0;
+
+      for (let i = lines.length - 1; i >= 0 && !detectedAmount; i -= 1) {
+        if (!totalKeywords.test(lines[i])) continue;
+        const candidates = lines[i].match(/(?:Rp\.?\s*)?[\d][\d.,]*/gi) ?? [];
+        detectedAmount =
+          candidates
+            .map(parseAmount)
+            .filter((n) => n > 0)
+            .at(-1) ?? 0;
+
+        if (!detectedAmount && lines[i + 1]) {
+          const nextCandidates =
+            lines[i + 1].match(/(?:Rp\.?\s*)?[\d][\d.,]*/gi) ?? [];
+          detectedAmount =
+            nextCandidates
+              .map(parseAmount)
+              .filter((n) => n > 0)
+              .at(-1) ?? 0;
+        }
+      }
+
+      if (!detectedAmount) {
+        const allAmounts = lines
+          .flatMap((line) => line.match(/(?:Rp\.?\s*)?[\d][\d.,]*/gi) ?? [])
+          .map(parseAmount)
+          .filter((n) => n > 0);
+        detectedAmount = allAmounts.sort((a, b) => b - a)[0] ?? 0;
+      }
+
+      let detectedDate = "";
+      const dateMatch =
+        text.match(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})\b/) ??
+        text.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+
+      if (dateMatch) {
+        if (dateMatch[1].length === 4) {
+          detectedDate = `${dateMatch[1]}-${String(dateMatch[2]).padStart(2, "0")}-${String(dateMatch[3]).padStart(2, "0")}`;
+        } else {
+          const year =
+            dateMatch[3].length === 2 ? `20${dateMatch[3]}` : dateMatch[3];
+          detectedDate = `${year}-${String(dateMatch[2]).padStart(2, "0")}-${String(dateMatch[1]).padStart(2, "0")}`;
+        }
+        const parsedDate = new Date(`${detectedDate}T12:00:00`);
+        if (
+          Number.isNaN(parsedDate.getTime()) ||
+          parsedDate.toISOString().slice(0, 10) !== detectedDate
+        ) {
+          detectedDate = "";
+        }
+      }
+
+      const ignoredLine =
+        /^(?:nota|receipt|invoice|struk|tanggal|date|cashier|kasir|telp|phone|www\.|https?:|npwp|thank you|terima kasih)\b/i;
+      const merchantLine = lines.find(
+        (line) =>
+          line.length >= 3 &&
+          line.length <= 70 &&
+          !ignoredLine.test(line) &&
+          !totalKeywords.test(line) &&
+          !/\d{4,}/.test(line),
+      );
+
+      return {
+        merchant: merchantLine ?? "",
+        date: detectedDate,
+        totalAmount: detectedAmount,
+        extractedText: text,
+        transactionTypeSuggestion: "expense",
+      };
+    };
+
+    try {
+      // Primary: Gemini API (server-side, API key is never sent to the browser).
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        let binary = "";
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+        }
+        const base64 = btoa(binary);
+
+        const response = await fetch("/api/receipt-extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mimeType: isPdf ? "application/pdf" : file.type,
+            data: base64,
+            availableAccounts: accountOptions.length
+              ? accountOptions
+              : ["Bank utama", "Cash"],
+            // Minimal history helps suggest an account/tag for repeat merchants.
+            recentTransactions: transactions.slice(0, 30).map((tx) => ({
+              description: tx.description,
+              account: tx.account,
+              category: tx.category,
+              tags: tx.tags.slice(0, 5),
+            })),
+            existingTags: Array.from(
+              new Set(transactions.flatMap((tx) => tx.tags)),
+            ).slice(0, 40),
+            availableCategories: categoryOptions("expense"),
+            availableCategoriesByType: {
+              income: categoryOptions("income"),
+              expense: categoryOptions("expense"),
+              transfer: categoryOptions("transfer"),
+              refund: categoryOptions("refund"),
+              asset_purchase: categoryOptions("asset_purchase"),
+              debt_payment: categoryOptions("debt_payment"),
+              receivable_payment: categoryOptions("receivable_payment"),
+              reimburse_payment: categoryOptions("reimburse_payment"),
+              adjustment: categoryOptions("adjustment"),
+            },
+          }),
+        });
+
+        const payload = (await response.json()) as {
+          error?: string;
+          merchant?: unknown;
+          date?: unknown;
+          totalAmount?: unknown;
+          extractedText?: unknown;
+          confidence?: unknown;
+          accountSuggestion?: unknown;
+          tags?: unknown;
+          categorySuggestion?: unknown;
+          transactionTypeSuggestion?: unknown;
+        };
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Gemini API tidak tersedia.");
+        }
+
+        const hasUsefulData =
+          (Number.isSafeInteger(Number(payload.totalAmount)) &&
+            Number(payload.totalAmount) > 0) ||
+          (typeof payload.date === "string" &&
+            /^\d{4}-\d{2}-\d{2}$/.test(payload.date)) ||
+          (typeof payload.merchant === "string" &&
+            payload.merchant.trim().length > 0);
+
+        if (!hasUsefulData) {
+          throw new Error("Gemini belum menemukan data yang cukup.");
+        }
+
+        applyReceiptData(payload);
+        if (payload.confidence === "low") {
+          toast.warning(
+            "Nota dibaca oleh Gemini, tetapi tingkat keyakinannya rendah. Periksa jenis transaksi, nominal, tanggal, akun, kategori, dan tag.",
+          );
+        } else {
+          toast.success(
+            "Nota dibaca dengan Gemini AI. Periksa jenis transaksi, nominal, tanggal, akun, kategori, dan tag sebelum menyimpan.",
+          );
+        }
+        return;
+      } catch (geminiError) {
+        console.warn(
+          "Gemini receipt extraction failed; falling back to local OCR:",
+          geminiError,
+        );
+        toast.warning(
+          "Gemini tidak tersedia. Mencoba membaca nota dengan OCR lokal…",
+        );
+      }
+
+      // Fallback: local Tesseract OCR. Works without an API key/internet,
+      // but its amount/date detection is less reliable than Gemini.
+      const { default: Tesseract } = await import("tesseract.js");
+      let text = "";
+
+      if (isImage) {
+        const result = await Tesseract.recognize(file, "ind+eng");
+        text = result.data.text;
+      } else {
+        const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+          "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
+          import.meta.url,
+        ).toString();
+
+        const pdf = await pdfjs.getDocument({
+          data: await file.arrayBuffer(),
+        }).promise;
+        const pageTexts: string[] = [];
+
+        for (
+          let pageNumber = 1;
+          pageNumber <= Math.min(pdf.numPages, 5);
+          pageNumber += 1
+        ) {
+          const page = await pdf.getPage(pageNumber);
+          const content = await page.getTextContent();
+          const extractedText = content.items
+            .map((item) => ("str" in item ? item.str : ""))
+            .join(" ")
+            .trim();
+
+          if (extractedText.length > 20) {
+            pageTexts.push(extractedText);
+          } else {
+            const viewport = page.getViewport({ scale: 1.8 });
+            const canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d");
+            if (!context) continue;
+            canvas.width = Math.ceil(viewport.width);
+            canvas.height = Math.ceil(viewport.height);
+            await page.render({ canvas, canvasContext: context, viewport })
+              .promise;
+            const result = await Tesseract.recognize(canvas, "ind+eng");
+            pageTexts.push(result.data.text);
+          }
+        }
+        text = pageTexts.join("\n");
+      }
+
+      const localResult = parseLocalOcrText(text);
+      const applied = applyReceiptData(localResult);
+      if (applied.detectedAmount || applied.detectedDate || applied.merchant) {
+        toast.success(
+          "Nota dibaca dengan OCR lokal. Periksa kembali hasil ekstraksi sebelum menyimpan.",
+        );
+      } else {
+        toast.error(
+          "OCR lokal belum berhasil mengenali nominal/tanggal/deskripsi. Isi manual atau coba foto yang lebih jelas.",
+        );
+      }
+    } catch (error) {
+      console.error("Receipt extraction failed:", error);
+      toast.error(
+        error instanceof Error
+          ? `Gagal membaca nota: ${error.message}`
+          : "Gagal membaca nota. Coba file lain atau isi manual.",
+      );
+    } finally {
+      setReceiptProcessing(false);
+      if (receiptInputRef.current) receiptInputRef.current.value = "";
+    }
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const numericAmount = Number(amount);
@@ -280,6 +822,14 @@ export default function TransactionsPage() {
   };
   return (
     <>
+      <input
+        ref={receiptInputRef}
+        type="file"
+        accept="image/*,application/pdf,.pdf"
+        capture="environment"
+        hidden
+        onChange={(e) => void handleReceiptUpload(e.target.files?.[0])}
+      />
       <div className="page-heading">
         <div>
           <h1>Transaksi</h1>
@@ -287,15 +837,17 @@ export default function TransactionsPage() {
             Catat dan kelola seluruh pergerakan uangmu.
           </div>
         </div>
-        <button
-          className="primary-btn"
-          onClick={() => {
-            reset();
-            setShowForm(true);
-          }}
-        >
-          <CirclePlus size={15} /> Tambah transaksi
-        </button>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <button
+            className="primary-btn"
+            onClick={() => {
+              reset();
+              setShowForm(true);
+            }}
+          >
+            <CirclePlus size={15} /> Tambah transaksi
+          </button>
+        </div>
       </div>
       <div className="metric-grid" style={{ marginBottom: 18 }}>
         <div className="card">
@@ -702,6 +1254,49 @@ export default function TransactionsPage() {
               </button>
             </div>
             <form onSubmit={submit} style={{ display: "grid", gap: 17 }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: 13,
+                  border: "1px dashed #b9c5bb",
+                  borderRadius: 10,
+                  background: "#f8fbf8",
+                }}
+              >
+                <ReceiptText size={20} color="#34734a" />
+                <div style={{ flex: "1 1 180px" }}>
+                  <strong style={{ display: "block", fontSize: 13 }}>
+                    Ekstrak dari nota
+                  </strong>
+                  <span
+                    className="muted"
+                    style={{ display: "block", marginTop: 3 }}
+                  >
+                    Foto nota atau upload PDF. Hasilnya akan mengisi form dan
+                    tetap perlu diperiksa.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  disabled={receiptProcessing}
+                  onClick={() => receiptInputRef.current?.click()}
+                >
+                  {receiptProcessing ? (
+                    <>
+                      <LoaderCircle size={14} className="animate-spin" />{" "}
+                      Membaca nota…
+                    </>
+                  ) : (
+                    <>
+                      <Camera size={14} /> Foto / Upload
+                    </>
+                  )}
+                </button>
+              </div>
               <div className="field">
                 <label>Jenis transaksi</label>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
