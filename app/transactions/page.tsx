@@ -1,8 +1,6 @@
 "use client";
 import { FormEvent, useMemo, useRef, useState } from "react";
 import {
-  ArrowDownLeft,
-  ArrowUpRight,
   ArrowLeftRight,
   Check,
   CirclePlus,
@@ -19,7 +17,6 @@ import {
   Clock3,
   FileMinus,
   ReceiptText,
-  Upload,
   Camera,
   LoaderCircle,
 } from "lucide-react";

@@ -35,7 +35,7 @@ import {
 import { formatIDR } from "@/lib/finance/money";
 import { useLocalTransactions } from "@/components/transaction-store";
 import { useLocalRecords } from "@/components/local-records";
-import { localDB } from "@/lib/offline/database";
+import { localDB, LocalTransaction } from "@/lib/offline/database";
 import {
   accountBalances,
   localNetWorth,
@@ -389,7 +389,12 @@ export default function DashboardPage() {
   }, [reportTransactions, currentMonth]);
 
   const balances = useMemo(
-    () => accountBalances(accounts, allTransactions as any, ledgerEntries),
+    () =>
+      accountBalances(
+        accounts,
+        allTransactions as LocalTransaction[],
+        ledgerEntries,
+      ),
     [accounts, allTransactions, ledgerEntries],
   );
   const liquidBalance = balances.reduce(
@@ -412,7 +417,7 @@ export default function DashboardPage() {
     accounts,
     assets,
     debts,
-    allTransactions as any,
+    allTransactions as LocalTransaction[],
     ledgerEntries,
   );
   const goalsSummary = goals.reduce(
@@ -639,8 +644,6 @@ export default function DashboardPage() {
   const topBudgetItems = [...budgetInfo]
     .sort((a, b) => b.percent - a.percent)
     .slice(0, 6);
-  const savingsPositive =
-    currentStats.income > 0 && currentStats.income - currentStats.expenses >= 0;
   const valuationHistory = [...valuations]
     .filter(
       (v) =>
