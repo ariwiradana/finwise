@@ -296,7 +296,7 @@ export function RecordManager({
                       }
                       style={inputStyle}
                     >
-                      <option value="">Pilih…</option>
+                      <option value="">Pilih</option>
                       {f.options?.map((o) => (
                         <option key={o}>{o}</option>
                       ))}
