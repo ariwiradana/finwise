@@ -26,6 +26,46 @@ import { DEFAULT_CATEGORIES } from "@/lib/offline/database";
 import { useLocalTransactions } from "@/components/transaction-store";
 import { useLocalRecords } from "@/components/local-records";
 
+const MAX_RECEIPT_UPLOAD_BYTES = 3 * 1024 * 1024;
+
+/** Shrink camera photos before Base64 encoding to avoid oversized serverless requests. */
+async function prepareReceiptFile(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || file.type === "image/gif") return file;
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const maxDimension = 1800;
+    const scale = Math.min(
+      1,
+      maxDimension / Math.max(bitmap.width, bitmap.height),
+    );
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) {
+      bitmap.close();
+      return file;
+    }
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.82),
+    );
+    if (!blob) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  } catch {
+    // Some browsers cannot decode HEIC/HEIF; preserve the original for fallback handling.
+    return file;
+  }
+}
+
 type TxType =
   | "income"
   | "expense"
@@ -569,7 +609,13 @@ export default function TransactionsPage() {
     try {
       // Primary: Gemini API (server-side, API key is never sent to the browser).
       try {
-        const bytes = new Uint8Array(await file.arrayBuffer());
+        const preparedFile = await prepareReceiptFile(file);
+        if (preparedFile.size > MAX_RECEIPT_UPLOAD_BYTES) {
+          throw new Error(
+            "Ukuran file masih terlalu besar setelah kompresi. Untuk PDF, coba ekspor ulang dengan ukuran lebih kecil atau gunakan foto nota.",
+          );
+        }
+        const bytes = new Uint8Array(await preparedFile.arrayBuffer());
         let binary = "";
         const chunkSize = 0x8000;
         for (let i = 0; i < bytes.length; i += chunkSize) {
@@ -581,7 +627,7 @@ export default function TransactionsPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            mimeType: isPdf ? "application/pdf" : file.type,
+            mimeType: isPdf ? "application/pdf" : preparedFile.type,
             data: base64,
             availableAccounts: accountOptions.length
               ? accountOptions
@@ -657,7 +703,10 @@ export default function TransactionsPage() {
           geminiError,
         );
         toast.warning(
-          "Gemini tidak tersedia. Mencoba membaca nota dengan OCR lokal…",
+          geminiError instanceof Error &&
+            geminiError.message.includes("masih terlalu besar")
+            ? `${geminiError.message} Mencoba OCR lokal…`
+            : "Gemini gagal membaca nota. Mencoba OCR lokal…",
         );
       }
 

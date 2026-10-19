@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const MAX_BASE64_LENGTH = 14_000_000; // roughly 10 MB before base64 encoding
+const MAX_BASE64_LENGTH = 4_000_000; // keep JSON requests comfortably below common serverless body limits
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -24,11 +24,30 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { mimeType?: unknown; data?: unknown; availableAccounts?: unknown; recentTransactions?: unknown; existingTags?: unknown; availableCategories?: unknown; availableCategoriesByType?: unknown };
+  let body: {
+    mimeType?: unknown;
+    data?: unknown;
+    availableAccounts?: unknown;
+    recentTransactions?: unknown;
+    existingTags?: unknown;
+    availableCategories?: unknown;
+    availableCategoriesByType?: unknown;
+  };
   try {
-    body = (await request.json()) as { mimeType?: unknown; data?: unknown; availableAccounts?: unknown; recentTransactions?: unknown; existingTags?: unknown; availableCategories?: unknown; availableCategoriesByType?: unknown };
+    body = (await request.json()) as {
+      mimeType?: unknown;
+      data?: unknown;
+      availableAccounts?: unknown;
+      recentTransactions?: unknown;
+      existingTags?: unknown;
+      availableCategories?: unknown;
+      availableCategoriesByType?: unknown;
+    };
   } catch {
-    return NextResponse.json({ error: "Request tidak valid." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Request tidak valid." },
+      { status: 400 },
+    );
   }
 
   const mimeType =
@@ -37,53 +56,122 @@ export async function POST(request: Request) {
 
   if (!ALLOWED_MIME_TYPES.has(mimeType)) {
     return NextResponse.json(
-      { error: "Format file belum didukung. Gunakan JPG, PNG, WEBP, HEIC, atau PDF." },
+      {
+        error:
+          "Format file belum didukung. Gunakan JPG, PNG, WEBP, HEIC, atau PDF.",
+      },
       { status: 400 },
     );
   }
 
-  if (!data || data.length > MAX_BASE64_LENGTH || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+  if (
+    !data ||
+    data.length > MAX_BASE64_LENGTH ||
+    !/^[A-Za-z0-9+/]+={0,2}$/.test(data)
+  ) {
     return NextResponse.json(
-      { error: "File kosong atau terlalu besar. Maksimal sekitar 10 MB." },
+      {
+        error:
+          "File kosong atau terlalu besar untuk diproses. Maksimal ukuran unggahan sekitar 3 MB; kompres gambar atau gunakan foto nota yang lebih kecil.",
+      },
       { status: 400 },
     );
   }
 
   const availableAccounts = Array.isArray(body.availableAccounts)
-    ? body.availableAccounts.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 30)
+    ? body.availableAccounts
+        .filter(
+          (item): item is string =>
+            typeof item === "string" && item.trim().length > 0,
+        )
+        .slice(0, 30)
     : [];
   const recentTransactions = Array.isArray(body.recentTransactions)
-    ? body.recentTransactions.slice(0, 30).filter((item): item is { description?: string; account?: string; category?: string; tags?: string[] } => Boolean(item) && typeof item === "object")
+    ? body.recentTransactions
+        .slice(0, 30)
+        .filter(
+          (
+            item,
+          ): item is {
+            description?: string;
+            account?: string;
+            category?: string;
+            tags?: string[];
+          } => Boolean(item) && typeof item === "object",
+        )
         .map((item) => ({
-          description: typeof item.description === "string" ? item.description.slice(0, 100) : "",
-          account: typeof item.account === "string" ? item.account.slice(0, 60) : "",
-          category: typeof item.category === "string" ? item.category.slice(0, 60) : "",
-          tags: Array.isArray(item.tags) ? item.tags.filter((tag): tag is string => typeof tag === "string").slice(0, 5) : [],
+          description:
+            typeof item.description === "string"
+              ? item.description.slice(0, 100)
+              : "",
+          account:
+            typeof item.account === "string" ? item.account.slice(0, 60) : "",
+          category:
+            typeof item.category === "string" ? item.category.slice(0, 60) : "",
+          tags: Array.isArray(item.tags)
+            ? item.tags
+                .filter((tag): tag is string => typeof tag === "string")
+                .slice(0, 5)
+            : [],
         }))
     : [];
   const existingTags = Array.isArray(body.existingTags)
-    ? body.existingTags.filter((item): item is string => typeof item === "string").slice(0, 40)
+    ? body.existingTags
+        .filter((item): item is string => typeof item === "string")
+        .slice(0, 40)
     : [];
   const availableCategories = Array.isArray(body.availableCategories)
-    ? body.availableCategories.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 60)
-    : ["Makan & Minum", "Transportasi", "Belanja", "Tagihan", "Keluarga", "Pekerjaan", "Kesehatan", "Hiburan", "Pajak", "Biaya Bank", "Bunga & Biaya Utang", "Lainnya"];
-  const rawCategoriesByType = body.availableCategoriesByType && typeof body.availableCategoriesByType === "object"
-    ? body.availableCategoriesByType as Record<string, unknown>
-    : {};
+    ? body.availableCategories
+        .filter(
+          (item): item is string =>
+            typeof item === "string" && item.trim().length > 0,
+        )
+        .slice(0, 60)
+    : [
+        "Makan & Minum",
+        "Transportasi",
+        "Belanja",
+        "Tagihan",
+        "Keluarga",
+        "Pekerjaan",
+        "Kesehatan",
+        "Hiburan",
+        "Pajak",
+        "Biaya Bank",
+        "Bunga & Biaya Utang",
+        "Lainnya",
+      ];
+  const rawCategoriesByType =
+    body.availableCategoriesByType &&
+    typeof body.availableCategoriesByType === "object"
+      ? (body.availableCategoriesByType as Record<string, unknown>)
+      : {};
   const supportedTransactionTypes = [
-    "income", "expense", "transfer", "refund", "asset_purchase",
-    "debt_payment", "receivable_payment", "reimburse_payment", "adjustment",
+    "income",
+    "expense",
+    "transfer",
+    "refund",
+    "asset_purchase",
+    "debt_payment",
+    "receivable_payment",
+    "reimburse_payment",
+    "adjustment",
   ] as const;
   const availableCategoriesByType: Record<string, string[]> = {};
   for (const transactionType of supportedTransactionTypes) {
     const values = rawCategoriesByType[transactionType];
     availableCategoriesByType[transactionType] = Array.isArray(values)
-      ? values.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 60)
-      : (transactionType === "income" || transactionType === "receivable_payment"
-          ? ["Gaji", "Pemasukan lain", "Reimburse"]
-          : transactionType === "transfer"
-            ? ["Transfer antar akun"]
-            : availableCategories);
+      ? values
+          .filter(
+            (item): item is string =>
+              typeof item === "string" && item.trim().length > 0,
+          )
+          .slice(0, 60)
+      : transactionType === "income" || transactionType === "receivable_payment"
+        ? ["Gaji", "Pemasukan lain", "Reimburse"]
+        : transactionType === "transfer"
+          ? ["Transfer antar akun"]
+          : availableCategories;
   }
 
   try {
@@ -150,7 +238,17 @@ Riwayat merchant/akun/kategori/tag (gunakan hanya untuk membantu saran, jangan s
                 accountSuggestion: { type: "STRING" },
                 transactionTypeSuggestion: {
                   type: "STRING",
-                  enum: ["income", "expense", "transfer", "refund", "asset_purchase", "debt_payment", "receivable_payment", "reimburse_payment", "adjustment"],
+                  enum: [
+                    "income",
+                    "expense",
+                    "transfer",
+                    "refund",
+                    "asset_purchase",
+                    "debt_payment",
+                    "receivable_payment",
+                    "reimburse_payment",
+                    "adjustment",
+                  ],
                 },
                 categorySuggestion: { type: "STRING" },
                 tags: { type: "ARRAY", items: { type: "STRING" } },
@@ -188,12 +286,19 @@ Riwayat merchant/akun/kategori/tag (gunakan hanya untuk membantu saran, jangan s
         googleResponse.status,
         googlePayload.error?.message ?? "Unknown Gemini API error",
       );
+      const apiMessage = googlePayload.error?.message ?? "";
       const message =
         googleResponse.status === 429
           ? "Kuota Gemini sedang habis atau terkena batas permintaan. Coba lagi nanti."
           : googleResponse.status === 400
-            ? "Gemini tidak dapat memproses file ini. Coba JPG/PNG atau PDF yang lebih kecil."
-            : "Gemini API sedang tidak tersedia.";
+            ? /model|not found|unsupported/i.test(apiMessage)
+              ? "Model Gemini tidak tersedia untuk konfigurasi API ini. Periksa nama model dan akses API."
+              : "Gemini menolak file atau parameter permintaan. Coba foto JPG/PNG yang lebih kecil dan jelas."
+            : googleResponse.status === 401 || googleResponse.status === 403
+              ? "Akses Gemini ditolak. Periksa GEMINI_API_KEY dan izin API."
+              : googleResponse.status >= 500
+                ? "Layanan Gemini sedang bermasalah. Coba lagi sebentar."
+                : "Gemini API tidak dapat memproses permintaan ini.";
       return NextResponse.json({ error: message }, { status: 502 });
     }
 
@@ -254,7 +359,8 @@ Riwayat merchant/akun/kategori/tag (gunakan hanya untuk membantu saran, jangan s
 
     const parsed = parseReceiptJson(outputText);
     if (!parsed) {
-      const finishReason = googlePayload.candidates?.[0]?.finishReason ?? "unknown";
+      const finishReason =
+        googlePayload.candidates?.[0]?.finishReason ?? "unknown";
       // Log only model output text for debugging; never log the uploaded receipt or API key.
       console.error("Gemini returned unparseable receipt JSON", {
         finishReason,
@@ -272,12 +378,19 @@ Riwayat merchant/akun/kategori/tag (gunakan hanya untuk membantu saran, jangan s
     }
 
     const amount = Number(parsed.totalAmount);
-    const transactionTypeSuggestion = supportedTransactionTypes.includes(parsed.transactionTypeSuggestion as typeof supportedTransactionTypes[number])
-      ? parsed.transactionTypeSuggestion as typeof supportedTransactionTypes[number]
+    const transactionTypeSuggestion = supportedTransactionTypes.includes(
+      parsed.transactionTypeSuggestion as (typeof supportedTransactionTypes)[number],
+    )
+      ? (parsed.transactionTypeSuggestion as (typeof supportedTransactionTypes)[number])
       : "expense";
-    const categoriesForSuggestedType = availableCategoriesByType[transactionTypeSuggestion] ?? availableCategories;
+    const categoriesForSuggestedType =
+      availableCategoriesByType[transactionTypeSuggestion] ??
+      availableCategories;
     return NextResponse.json({
-      merchant: typeof parsed.merchant === "string" ? parsed.merchant.slice(0, 120) : "",
+      merchant:
+        typeof parsed.merchant === "string"
+          ? parsed.merchant.slice(0, 120)
+          : "",
       date: typeof parsed.date === "string" ? parsed.date : "",
       totalAmount: Number.isSafeInteger(amount) && amount > 0 ? amount : 0,
       currency: typeof parsed.currency === "string" ? parsed.currency : "IDR",
@@ -292,25 +405,38 @@ Riwayat merchant/akun/kategori/tag (gunakan hanya untuk membantu saran, jangan s
           ? parsed.extractedText.slice(0, 1200)
           : "",
       accountSuggestion:
-        typeof parsed.accountSuggestion === "string" && availableAccounts.includes(parsed.accountSuggestion)
+        typeof parsed.accountSuggestion === "string" &&
+        availableAccounts.includes(parsed.accountSuggestion)
           ? parsed.accountSuggestion
           : (availableAccounts[0] ?? ""),
       transactionTypeSuggestion,
       categorySuggestion:
-        typeof parsed.categorySuggestion === "string" && categoriesForSuggestedType.includes(parsed.categorySuggestion)
+        typeof parsed.categorySuggestion === "string" &&
+        categoriesForSuggestedType.includes(parsed.categorySuggestion)
           ? parsed.categorySuggestion
-          : (categoriesForSuggestedType.includes("Lainnya") ? "Lainnya" : (categoriesForSuggestedType[0] ?? "")),
+          : categoriesForSuggestedType.includes("Lainnya")
+            ? "Lainnya"
+            : (categoriesForSuggestedType[0] ?? ""),
       tags: Array.isArray(parsed.tags)
-        ? Array.from(new Set(parsed.tags
-            .filter((tag): tag is string => typeof tag === "string")
-            .map((tag) => tag.trim().toLocaleLowerCase("id-ID").replace(/^#/, ""))
-            .filter((tag) => tag.length > 0 && tag.length <= 32))).slice(0, 5)
+        ? Array.from(
+            new Set(
+              parsed.tags
+                .filter((tag): tag is string => typeof tag === "string")
+                .map((tag) =>
+                  tag.trim().toLocaleLowerCase("id-ID").replace(/^#/, ""),
+                )
+                .filter((tag) => tag.length > 0 && tag.length <= 32),
+            ),
+          ).slice(0, 5)
         : [],
     });
   } catch (error) {
     console.error("Receipt extraction route failed:", error);
     return NextResponse.json(
-      { error: "Tidak dapat menghubungi Gemini. Coba lagi atau gunakan OCR lokal." },
+      {
+        error:
+          "Tidak dapat menghubungi Gemini. Coba lagi atau gunakan OCR lokal.",
+      },
       { status: 502 },
     );
   }
