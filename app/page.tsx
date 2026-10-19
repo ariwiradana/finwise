@@ -412,15 +412,16 @@ export default function DashboardPage() {
                   />
                 </div>
                 {b.percent >= 75 && (
-                  <div
+                  <p
                     className="muted"
                     style={{
                       marginTop: 5,
+                      fontSize: 12,
                       color: b.percent >= 100 ? "#b54c3b" : "#986300",
                     }}
                   >
                     Budget terpakai {Math.round(b.percent)}%
-                  </div>
+                  </p>
                 )}
               </div>
             ))
@@ -462,8 +463,10 @@ export default function DashboardPage() {
           <div className="section-title">
             <h2>Transaksi terbaru</h2>
             <Link href="/transactions" className="muted">
-              Lihat semua{" "}
-              <ChevronRight size={13} style={{ verticalAlign: "middle" }} />
+              <div className="flex items-center">
+                Lihat semua{" "}
+                <ChevronRight size={16} style={{ verticalAlign: "middle" }} />
+              </div>
             </Link>
           </div>
           {!ready ? (
