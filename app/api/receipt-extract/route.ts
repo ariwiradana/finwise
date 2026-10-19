@@ -181,6 +181,7 @@ Kembalikan hanya data yang benar-benar terlihat pada nota; jangan menebak nilai 
 
 Aturan:
 - merchant: nama toko/usaha, tanpa alamat panjang jika tidak perlu. Jika tidak terbaca, string kosong.
+- note/catatan: buat sangat singkat, maksimal 3–8 kata, hanya inti pembelian/transaksi (contoh: "Makan siang", "Belanja kebutuhan rumah", "Bensin motor"). Jangan mengulang merchant, tanggal, nominal, atau menyalin daftar item panjang. Jika tidak ada informasi yang cukup, isi string kosong. Jangan mengarang.
 - date: tanggal transaksi dalam format YYYY-MM-DD. Perhatikan bahwa nota Indonesia sering memakai DD/MM/YYYY atau DD-MM-YYYY. Jika tanggal tidak jelas/tidak ada, string kosong.
 - totalAmount: nominal utama yang sesuai dengan transactionTypeSuggestion, sebagai bilangan bulat rupiah tanpa pemisah. Untuk expense/asset_purchase/debt_payment gunakan total akhir yang dibayar; untuk income/receivable_payment gunakan jumlah uang diterima; untuk transfer gunakan jumlah transfer; untuk refund gunakan jumlah yang dikembalikan. Untuk struk belanja, utamakan "TOTAL BAYAR", "GRAND TOTAL", "TOTAL", "AMOUNT PAID" atau jumlah akhir setelah diskon. Jangan gunakan subtotal, total item, pajak, uang diterima, atau kembalian jika itu bukan nominal transaksi. Jika tidak yakin atau nominal tidak jelas, isi 0.
 - currency: biasanya IDR untuk struk Indonesia.
