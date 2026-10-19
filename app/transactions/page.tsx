@@ -116,8 +116,6 @@ export default function TransactionsPage() {
           ...t.tags,
         ].some((value) => String(value).toLocaleLowerCase("id-ID").includes(q));
 
-        // Filter tipe transaksi terpisah dari status laporan.
-        // "Masuk laporan" bukan berarti transaksi tersebut adalah pemasukan.
         let matchesFilter = true;
 
         switch (filter) {
