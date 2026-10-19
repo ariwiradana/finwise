@@ -199,92 +199,175 @@ Tag yang pernah digunakan: ${JSON.stringify(existingTags)}
 Riwayat merchant/akun/kategori/tag (gunakan hanya untuk membantu saran, jangan salin detail transaksi ke hasil): ${JSON.stringify(recentTransactions)}
 `;
 
-    const googleResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
+    const requestBody = {
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
             {
-              role: "user",
-              parts: [
-                { text: prompt },
-                {
-                  inlineData: {
-                    mimeType,
-                    data,
-                  },
-                },
-              ],
+              inlineData: {
+                mimeType,
+                data,
+              },
             },
           ],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 900,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                merchant: { type: "STRING" },
-                date: { type: "STRING" },
-                totalAmount: { type: "INTEGER" },
-                currency: { type: "STRING" },
-                confidence: {
-                  type: "STRING",
-                  enum: ["high", "medium", "low"],
-                },
-                extractedText: { type: "STRING" },
-                accountSuggestion: { type: "STRING" },
-                transactionTypeSuggestion: {
-                  type: "STRING",
-                  enum: [
-                    "income",
-                    "expense",
-                    "transfer",
-                    "refund",
-                    "asset_purchase",
-                    "debt_payment",
-                    "receivable_payment",
-                    "reimburse_payment",
-                    "adjustment",
-                  ],
-                },
-                categorySuggestion: { type: "STRING" },
-                tags: { type: "ARRAY", items: { type: "STRING" } },
-              },
-              required: [
-                "merchant",
-                "date",
-                "totalAmount",
-                "currency",
-                "confidence",
-                "extractedText",
-                "accountSuggestion",
-                "transactionTypeSuggestion",
-                "categorySuggestion",
-                "tags",
+        },
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 900,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            merchant: { type: "STRING" },
+            date: { type: "STRING" },
+            totalAmount: { type: "INTEGER" },
+            currency: { type: "STRING" },
+            confidence: {
+              type: "STRING",
+              enum: ["high", "medium", "low"],
+            },
+            extractedText: { type: "STRING" },
+            accountSuggestion: { type: "STRING" },
+            transactionTypeSuggestion: {
+              type: "STRING",
+              enum: [
+                "income",
+                "expense",
+                "transfer",
+                "refund",
+                "asset_purchase",
+                "debt_payment",
+                "receivable_payment",
+                "reimburse_payment",
+                "adjustment",
               ],
             },
+            categorySuggestion: { type: "STRING" },
+            tags: { type: "ARRAY", items: { type: "STRING" } },
           },
-        }),
+          required: [
+            "merchant",
+            "date",
+            "totalAmount",
+            "currency",
+            "confidence",
+            "extractedText",
+            "accountSuggestion",
+            "transactionTypeSuggestion",
+            "categorySuggestion",
+            "tags",
+          ],
+        },
       },
-    );
+    };
+    const modelCandidates = [
+      process.env.GEMINI_RECEIPT_MODEL || "gemini-3.6-flash",
+      process.env.GEMINI_RECEIPT_FALLBACK_MODEL || "gemini-3.8-flash",
+    ].filter((model, index, models) => models.indexOf(model) === index);
 
-    const googlePayload = (await googleResponse.json()) as {
+    let googleResponse: Response | null = null;
+    let googlePayload: {
       error?: { message?: string };
       candidates?: {
         finishReason?: string;
         content?: { parts?: { text?: string }[] };
       }[];
       promptFeedback?: { blockReason?: string };
-    };
+    } = {};
+    let usedModel = modelCandidates[0];
+
+    // Retry temporary overloads twice on the primary model, then try the fallback model.
+    for (
+      let modelIndex = 0;
+      modelIndex < modelCandidates.length;
+      modelIndex++
+    ) {
+      const model = modelCandidates[modelIndex];
+      const attemptsForModel = modelIndex === 0 ? 3 : 1;
+      for (let attempt = 0; attempt < attemptsForModel; attempt++) {
+        try {
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(requestBody),
+              signal: AbortSignal.timeout(25_000),
+            },
+          );
+          const payload = (await response
+            .json()
+            .catch(() => ({}))) as typeof googlePayload;
+          googleResponse = response;
+          googlePayload = payload;
+          usedModel = model;
+
+          if (response.ok) break;
+          const temporaryFailure =
+            response.status === 429 ||
+            response.status === 500 ||
+            response.status === 502 ||
+            response.status === 503 ||
+            response.status === 504;
+          if (!temporaryFailure) break;
+
+          if (attempt < attemptsForModel - 1) {
+            const retryAfter = response.headers.get("retry-after");
+            const retryAfterMs = retryAfter ? Number(retryAfter) * 1000 : 0;
+            const backoffMs = Math.max(retryAfterMs, 1000 * (attempt + 1));
+            await new Promise((resolve) =>
+              setTimeout(resolve, Math.min(backoffMs, 5000)),
+            );
+            continue;
+          }
+        } catch (error) {
+          console.error(`Gemini request failed for model ${model}:`, error);
+          googleResponse = null;
+          if (attempt < attemptsForModel - 1) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, 1000 * (attempt + 1)),
+            );
+            continue;
+          }
+        }
+        break;
+      }
+      if (googleResponse?.ok) break;
+      const status = googleResponse?.status;
+      const shouldTryFallback =
+        modelIndex === 0 &&
+        (status === 429 ||
+          status === 500 ||
+          status === 502 ||
+          status === 503 ||
+          status === 504 ||
+          status === undefined);
+      if (!shouldTryFallback) break;
+      console.warn(
+        `Gemini primary model ${model} unavailable (${status ?? "network error"}); trying fallback model.`,
+      );
+      googleResponse = null;
+    }
+
+    if (!googleResponse) {
+      return NextResponse.json(
+        {
+          error:
+            "Tidak dapat menghubungi Gemini setelah beberapa percobaan. Coba lagi atau gunakan OCR lokal.",
+        },
+        { status: 502 },
+      );
+    }
 
     if (!googleResponse.ok) {
       console.error(
         "Gemini API error:",
         googleResponse.status,
         googlePayload.error?.message ?? "Unknown Gemini API error",
+        { model: usedModel },
       );
       const apiMessage = googlePayload.error?.message ?? "";
       const message =
@@ -297,7 +380,7 @@ Riwayat merchant/akun/kategori/tag (gunakan hanya untuk membantu saran, jangan s
             : googleResponse.status === 401 || googleResponse.status === 403
               ? "Akses Gemini ditolak. Periksa GEMINI_API_KEY dan izin API."
               : googleResponse.status >= 500
-                ? "Layanan Gemini sedang bermasalah. Coba lagi sebentar."
+                ? "Gemini sedang sibuk atau mengalami gangguan, termasuk setelah mencoba model cadangan. Coba lagi sebentar atau gunakan OCR lokal."
                 : "Gemini API tidak dapat memproses permintaan ini.";
       return NextResponse.json({ error: message }, { status: 502 });
     }
