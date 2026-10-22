@@ -9,6 +9,7 @@ import {
   localNetWorth,
   transactionCategoryAmount,
 } from "@/lib/finance/local-summary";
+import { isTransactionExcludedFromReports } from "@/lib/finance/report-exclusions";
 export default function ReportsPage() {
   const { transactions, ledgerEntries, ready } = useLocalTransactions();
   const { records: accounts } = useLocalRecords("accounts");
@@ -25,7 +26,7 @@ export default function ReportsPage() {
   const report = useMemo(() => {
     const today = new Date();
     const included = transactions.filter(
-      (t) => !t.deletedAt && !t.excludedFromReports,
+      (t) => !isTransactionExcludedFromReports(t, accounts),
     );
     const filtered = included.filter((t) => {
       if (period === "all") return true;
@@ -187,7 +188,7 @@ export default function ReportsPage() {
       anomalies,
       refunds,
     };
-  }, [transactions, period]);
+  }, [transactions, period, accounts]);
   const netWorth = localNetWorth(
     accounts,
     assets,

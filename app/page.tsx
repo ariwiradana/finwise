@@ -21,6 +21,7 @@ import {
   localNetWorth,
   transactionCategoryAmount,
 } from "@/lib/finance/local-summary";
+import { isTransactionExcludedFromReports } from "@/lib/finance/report-exclusions";
 export default function DashboardPage() {
   const { transactions, ledgerEntries, ready } = useLocalTransactions();
   const { records: accounts } = useLocalRecords("accounts");
@@ -38,7 +39,9 @@ export default function DashboardPage() {
   const stats = useMemo(() => {
     const all = transactions.filter((t) => !t.deletedAt);
     const month = all.filter(
-      (t) => t.date.slice(0, 7) === currentMonth && !t.excludedFromReports,
+      (t) =>
+        t.date.slice(0, 7) === currentMonth &&
+        !isTransactionExcludedFromReports(t, accounts),
     );
     const income = month
       .filter((t) => ["income", "receivable_payment"].includes(t.type))
@@ -102,7 +105,7 @@ export default function DashboardPage() {
       )
       .reduce((s, t) => s + t.amount, 0);
     const anomalies = all
-      .filter((t) => t.amount >= 1_000_000 && !t.excludedFromReports)
+      .filter((t) => t.amount >= 1_000_000 && !isTransactionExcludedFromReports(t, accounts))
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);
     return {
@@ -114,14 +117,14 @@ export default function DashboardPage() {
       month,
       refunds,
     };
-  }, [transactions, currentMonth]);
+  }, [transactions, currentMonth, accounts]);
   const budgetInfo = budgets.map((b) => {
     const spent =
       transactions
         .filter(
           (t) =>
             !t.deletedAt &&
-            !t.excludedFromReports &&
+            !isTransactionExcludedFromReports(t, accounts) &&
             t.date.slice(0, 7) === currentMonth &&
             ["expense", "asset_purchase", "debt_payment"].includes(t.type),
         )
@@ -133,7 +136,7 @@ export default function DashboardPage() {
         .filter(
           (t) =>
             !t.deletedAt &&
-            !t.excludedFromReports &&
+            !isTransactionExcludedFromReports(t, accounts) &&
             t.date.slice(0, 7) === currentMonth &&
             t.type === "refund",
         )

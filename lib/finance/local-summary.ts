@@ -1,4 +1,83 @@
-import type {LocalRecord,LocalTransaction,LocalLedgerEntry} from '@/lib/offline/database';
-export function accountBalances(accounts:LocalRecord[],transactions:LocalTransaction[],ledgerEntries?:LocalLedgerEntry[]){return accounts.filter(a=>!a.archivedAt).map(a=>({id:a.id,name:a.name,type:String(a.data.type||'Bank'),openingBalance:Number(a.data.openingBalance||0),balance:Number(a.data.openingBalance||0)+(ledgerEntries?ledgerEntries.filter(e=>e.account===a.name).reduce((sum,e)=>sum+e.amount,0):transactions.filter(t=>!t.deletedAt&&!t.partnerPaid).reduce((sum,t)=>{if(t.type==='transfer')return sum+(t.account===a.name?-t.amount:0)+(t.destinationAccount===a.name?t.amount:0);if(t.account!==a.name)return sum;if(['income','receivable_payment'].includes(t.type))return sum+t.amount;if(['expense','asset_purchase','debt_payment','reimburse_payment'].includes(t.type))return sum-t.amount;if(t.type==='refund')return sum+t.amount;return sum},0))}))}
-export function localNetWorth(accounts:LocalRecord[],assets:LocalRecord[],debts:LocalRecord[],transactions:LocalTransaction[],ledgerEntries?:LocalLedgerEntry[]){const liquid=accountBalances(accounts,transactions,ledgerEntries).reduce((s,a)=>s+a.balance,0);const assetValue=assets.filter(a=>!a.archivedAt).reduce((s,a)=>s+Number(a.data.currentValue||0),0);const debtValue=debts.filter(d=>!d.archivedAt).reduce((s,d)=>s+(String(d.data.type||'').toLowerCase()==='piutang'?-Number(d.data.outstanding||0):Number(d.data.outstanding||0)),0);return liquid+assetValue-debtValue}
-export function transactionCategoryAmount(t:LocalTransaction,category:string){if(t.type==='debt_payment'&&t.expenseAmount!==undefined&&t.expenseAmount===0)return 0;if(t.type==='debt_payment'&&t.expenseAmount!==undefined&&!t.splitLines?.length)return t.category===category?t.expenseAmount:0;if(t.splitLines?.length)return t.splitLines.filter(s=>s.category===category).reduce((sum,s)=>sum+s.amount,0);return t.category===category?t.amount:0}
+import type { LocalRecord, LocalTransaction, LocalLedgerEntry } from '@/lib/offline/database';
+
+export function accountBalances(
+  accounts: LocalRecord[],
+  transactions: LocalTransaction[],
+  ledgerEntries?: LocalLedgerEntry[],
+) {
+  return accounts
+    .filter((account) => !account.archivedAt)
+    .map((account) => ({
+      id: account.id,
+      name: account.name,
+      type: String(account.data.type || 'Bank'),
+      openingBalance: Number(account.data.openingBalance || 0),
+      balance:
+        Number(account.data.openingBalance || 0) +
+        (ledgerEntries
+          ? ledgerEntries
+              .filter((entry) => entry.account === account.name)
+              .reduce((sum, entry) => sum + entry.amount, 0)
+          : transactions
+              .filter((transaction) => !transaction.deletedAt && !transaction.partnerPaid)
+              .reduce((sum, transaction) => {
+                if (transaction.type === 'transfer') {
+                  return (
+                    sum +
+                    (transaction.account === account.name ? -transaction.amount : 0) +
+                    (transaction.destinationAccount === account.name ? transaction.amount : 0)
+                  );
+                }
+                if (transaction.account !== account.name) return sum;
+                if (['income', 'receivable_payment'].includes(transaction.type)) return sum + transaction.amount;
+                if (['expense', 'asset_purchase', 'debt_payment', 'reimburse_payment'].includes(transaction.type)) return sum - transaction.amount;
+                if (transaction.type === 'refund') return sum + transaction.amount;
+                return sum;
+              }, 0)),
+    }));
+}
+
+export function localNetWorth(
+  accounts: LocalRecord[],
+  assets: LocalRecord[],
+  debts: LocalRecord[],
+  transactions: LocalTransaction[],
+  ledgerEntries?: LocalLedgerEntry[],
+) {
+  // Excluded wallets remain available for recording transactions and viewing balances,
+  // but their balances must not contribute to personal net worth.
+  const reportableAccounts = accounts.filter(
+    (account) => !account.archivedAt && account.data.excludeFromReports !== true,
+  );
+  const liquid = accountBalances(reportableAccounts, transactions, ledgerEntries).reduce(
+    (sum, account) => sum + account.balance,
+    0,
+  );
+  const assetValue = assets
+    .filter((asset) => !asset.archivedAt)
+    .reduce((sum, asset) => sum + Number(asset.data.currentValue || 0), 0);
+  const debtValue = debts
+    .filter((debt) => !debt.archivedAt)
+    .reduce(
+      (sum, debt) =>
+        sum +
+        (String(debt.data.type || '').toLowerCase() === 'piutang'
+          ? -Number(debt.data.outstanding || 0)
+          : Number(debt.data.outstanding || 0)),
+      0,
+    );
+  return liquid + assetValue - debtValue;
+}
+
+export function transactionCategoryAmount(transaction: LocalTransaction, category: string) {
+  if (transaction.type === 'debt_payment' && transaction.expenseAmount !== undefined && transaction.expenseAmount === 0) return 0;
+  if (transaction.type === 'debt_payment' && transaction.expenseAmount !== undefined && !transaction.splitLines?.length) {
+    return transaction.category === category ? transaction.expenseAmount : 0;
+  }
+  if (transaction.splitLines?.length) {
+    return transaction.splitLines
+      .filter((split) => split.category === category)
+      .reduce((sum, split) => sum + split.amount, 0);
+  }
+  return transaction.category === category ? transaction.amount : 0;
+}

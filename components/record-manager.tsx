@@ -8,7 +8,7 @@ import { useLocalTransactions } from "@/components/transaction-store";
 export type Field = {
   key: string;
   label: string;
-  type?: "text" | "number" | "date" | "select" | "textarea";
+  type?: "text" | "number" | "date" | "select" | "textarea" | "checkbox";
   required?: boolean;
   options?: string[];
   placeholder?: string;
@@ -36,7 +36,7 @@ export function RecordManager({
   const [query, setQuery] = useState("");
   const blank = () =>
     Object.fromEntries(
-      fields.map((f) => [f.key, f.type === "number" ? "0" : ""]),
+      fields.map((f) => [f.key, f.type === "number" ? "0" : f.type === "checkbox" ? false : ""]),
     );
   const [form, setForm] = useState<Record<string, unknown>>(blank());
   const filtered = useMemo(
@@ -156,14 +156,16 @@ export function RecordManager({
                     </td>
                     {fields.map((f) => (
                       <td key={f.key}>
-                        {amountKey === f.key
-                          ? formatIDR(Number(r.data[f.key] || 0))
-                          : f.type === "number" &&
-                              /amount|value|balance|limit|target|payment|principal|allocated/i.test(
-                                f.key,
-                              )
+                        {f.type === "checkbox"
+                          ? (r.data[f.key] === true ? "Aktif" : "Tidak")
+                          : amountKey === f.key
                             ? formatIDR(Number(r.data[f.key] || 0))
-                            : String(r.data[f.key] ?? "—") || "—"}
+                            : f.type === "number" &&
+                                /amount|value|balance|limit|target|payment|principal|allocated/i.test(
+                                  f.key,
+                                )
+                              ? formatIDR(Number(r.data[f.key] || 0))
+                              : String(r.data[f.key] ?? "—") || "—"}
                       </td>
                     ))}
                     {kind === "accounts" && (
@@ -277,6 +279,43 @@ export function RecordManager({
             />
             <div className="form-grid" style={{ marginTop: 12 }}>
               {fields.map((f) => (
+                f.type === "checkbox" ? (
+                  <label
+                    key={f.key}
+                    style={{
+                      gridColumn: "1 / -1",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 10,
+                      padding: 13,
+                      border: "1px solid #e4e7ea",
+                      borderRadius: 10,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form[f.key] === true}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, [f.key]: e.target.checked }))
+                      }
+                      style={{ marginTop: 3 }}
+                    />
+                    <span>
+                      <strong style={{ display: "block", fontSize: 12 }}>
+                        {f.label}
+                      </strong>
+                      <span
+                        className="muted"
+                        style={{ display: "block", marginTop: 4, lineHeight: 1.5 }}
+                      >
+                        {f.key === "excludeFromReports"
+                          ? "Transaksi dari dompet ini tetap tercatat dan saldo tetap berubah, tetapi tidak dihitung dalam laporan dan budget."
+                          : "Aktifkan opsi ini jika data tidak ingin dihitung dalam laporan."}
+                      </span>
+                    </span>
+                  </label>
+                ) : (
                 <label
                   key={f.key}
                   style={{
@@ -326,6 +365,7 @@ export function RecordManager({
                     />
                   )}
                 </label>
+                )
               ))}
             </div>
             <div
