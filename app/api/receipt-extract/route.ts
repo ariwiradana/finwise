@@ -187,7 +187,7 @@ Aturan:
 - currency: biasanya IDR untuk struk Indonesia.
 - transactionTypeSuggestion: pilih tepat satu dari enum: "expense", "income", "transfer", "refund", "asset_purchase", "debt_payment", "receivable_payment", "reimburse_payment", "adjustment". Gunakan bukti yang terlihat dan konteks transaksi. Default untuk struk belanja, restoran, jasa, tagihan, bensin, cuci motor, dan pembayaran ke merchant adalah "expense". Gunakan "refund" hanya jika dokumen jelas menunjukkan pengembalian dana kepada pembeli. Gunakan "income" hanya jika bukti jelas menunjukkan uang diterima oleh pengguna, bukan bukti pengguna membayar. Gunakan "transfer" hanya jika bukti jelas menunjukkan transfer antar akun milik pengguna sendiri; transfer ke merchant/orang lain bukan otomatis transfer antar akun. Gunakan "asset_purchase" hanya untuk barang tahan lama bernilai aset yang jelas (misalnya kamera, laptop, motor), bukan barang konsumsi biasa. Gunakan jenis lain hanya jika bukti eksplisit mendukungnya; jika ragu pilih "expense". Jangan menganggap jenis transaksi pasti hanya dari nama merchant.
 - confidence: "high", "medium", atau "low" berdasarkan kejelasan bukti.
-- extractedText: salin ringkasan teks yang relevan dari nota, terutama baris merchant, tanggal, subtotal/diskon bila ada, dan baris total. Jangan menambahkan informasi yang tidak ada di nota. Maksimal 1200 karakter.
+- extractedText: salin ringkasan teks yang relevan dari nota, terutama baris merchant, tanggal, subtotal/diskon bila ada, dan baris total. Jangan menambahkan informasi yang tidak ada di nota. Maksimal 600 karakter.
 - Periksa kembali angka dengan cermat; titik/koma dapat menjadi pemisah ribuan.
 - accountSuggestion: pilih SATU nama akun persis dari daftar akun yang tersedia di bawah. Nota biasanya tidak menyebut sumber pembayaran, jadi gunakan riwayat transaksi merchant yang mirip untuk menyarankan akun. Jika tidak ada pola yang jelas, pilih akun pertama dari daftar sebagai saran default. Jangan membuat nama akun baru.
 - categorySuggestion: pilih SATU kategori yang cocok untuk transactionTypeSuggestion dari daftar kategori bertipe di bawah. Untuk expense/asset_purchase/debt_payment/refund gunakan kategori pengeluaran; untuk income/receivable_payment gunakan kategori pemasukan; untuk transfer gunakan kategori transfer; untuk reimburse_payment gunakan kategori alokasi. Contoh pengeluaran: restoran, warung, kopi, bakery, makanan/minuman -> "Makan & Minum"; cuci motor, cuci mobil, bengkel, ganti oli, bensin, parkir, tol, transportasi -> "Transportasi"; supermarket/minimarket -> kategori belanja yang tersedia; PLN, internet, pulsa, air -> "Tagihan"; klinik/apotek/obat -> "Kesehatan". Gunakan hanya nama kategori persis dari daftar untuk jenis yang dipilih. Jika ragu pilih "Lainnya" jika tersedia, selain itu kategori pertama dari jenis tersebut. Jangan membuat kategori baru.
@@ -217,7 +217,7 @@ Riwayat merchant/akun/kategori/tag (gunakan hanya untuk membantu saran, jangan s
       ],
       generationConfig: {
         temperature: 0.1,
-        maxOutputTokens: 900,
+        maxOutputTokens: 4096,
         responseMimeType: "application/json",
         responseSchema: {
           type: "OBJECT",
@@ -454,7 +454,7 @@ Riwayat merchant/akun/kategori/tag (gunakan hanya untuk membantu saran, jangan s
         {
           error:
             finishReason === "MAX_TOKENS"
-              ? "Hasil Gemini terpotong. Coba foto yang lebih jelas atau lebih kecil."
+              ? "Respons Gemini mencapai batas output token dan JSON tidak lengkap. Coba lagi; jika berulang, periksa konfigurasi model atau kurangi konteks yang dikirim."
               : "Gemini mengirim format yang tidak bisa dibaca. Silakan coba lagi; aplikasi akan mencoba OCR lokal.",
         },
         { status: 502 },
@@ -486,7 +486,7 @@ Riwayat merchant/akun/kategori/tag (gunakan hanya untuk membantu saran, jangan s
           : "low",
       extractedText:
         typeof parsed.extractedText === "string"
-          ? parsed.extractedText.slice(0, 1200)
+          ? parsed.extractedText.slice(0, 600)
           : "",
       accountSuggestion:
         typeof parsed.accountSuggestion === "string" &&

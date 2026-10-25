@@ -702,12 +702,15 @@ export default function TransactionsPage() {
           "Gemini receipt extraction failed; falling back to local OCR:",
           geminiError,
         );
-        toast.warning(
-          geminiError instanceof Error &&
-            geminiError.message.includes("masih terlalu besar")
-            ? `${geminiError.message} Mencoba OCR lokal…`
-            : "Gemini gagal membaca nota. Mencoba OCR lokal…",
-        );
+        const geminiErrorMessage =
+          geminiError instanceof Error && geminiError.message.trim()
+            ? geminiError.message.trim()
+            : "Gemini mengembalikan error yang tidak diketahui.";
+        // Show the actual message returned by /api/receipt-extract instead of
+        // replacing every Gemini failure with a generic frontend toast.
+        toast.warning(`${geminiErrorMessage} Mencoba OCR lokal…`, {
+          duration: 8000,
+        });
       }
 
       // Fallback: local Tesseract OCR. Works without an API key/internet,
