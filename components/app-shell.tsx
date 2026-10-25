@@ -21,9 +21,19 @@ import {
   X,
   LogOut,
   LockKeyhole,
+  UserRound,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { localDB } from "@/lib/offline/database";
+import Image from "next/image";
+
+type LocalProfile = { displayName: string; avatar: string };
+const emptyProfile: LocalProfile = { displayName: "", avatar: "" };
+
+function profileInitials(value: string) {
+  const parts = value.trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || "ME";
+}
 
 const groups = [
   {
@@ -57,6 +67,7 @@ const groups = [
   {
     label: "SYSTEM",
     items: [
+      { href: "/profile", label: "Profil & Akun", icon: UserRound },
       { href: "/settings", label: "Pengaturan & Audit", icon: Settings2 },
       // { href: "/login", label: "Login / Cloud", icon: LockKeyhole },
     ],
@@ -66,10 +77,39 @@ const groups = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [profile, setProfile] = useState<LocalProfile>(emptyProfile);
   const [pinReady, setPinReady] = useState(false);
   const [pinRequired, setPinRequired] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
+  useEffect(() => {
+    let active = true;
+    const loadProfile = async () => {
+      try {
+        const response = await fetch("/api/auth/profile", {
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+        const saved = (await response.json()) as Partial<LocalProfile>;
+        if (active)
+          setProfile({
+            displayName:
+              typeof saved.displayName === "string" ? saved.displayName : "",
+            avatar: typeof saved.avatar === "string" ? saved.avatar : "",
+          });
+      } catch {
+        if (active) setProfile(emptyProfile);
+      }
+    };
+    void loadProfile();
+    const handleUpdate = () => void loadProfile();
+    window.addEventListener("finwise-profile-updated", handleUpdate);
+    return () => {
+      active = false;
+      window.removeEventListener("finwise-profile-updated", handleUpdate);
+    };
+  }, []);
+
   useEffect(() => {
     if ("serviceWorker" in navigator)
       void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
@@ -340,12 +380,53 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               <LogOut size={14} />
             </button>
-            <div
-              className="brand-mark topbar-avatar"
-              style={{ width: 30, height: 30, borderRadius: 99, fontSize: 11 }}
+            <Link
+              href="/profile"
+              onClick={() => setMobileOpen(false)}
+              className="secondary-btn topbar-profile-link"
+              aria-label="Buka Profil & Akun"
+              title="Profil & Akun"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                textDecoration: "none",
+                padding: "5px 9px 5px 5px",
+                borderRadius: 999,
+                color: "inherit",
+              }}
             >
-              ME
-            </div>
+              <span
+                className="brand-mark topbar-avatar"
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 99,
+                  fontSize: 11,
+                  overflow: "hidden",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {profile.avatar ? (
+                  <Image
+                    src={profile.avatar}
+                    alt="Foto profil"
+                    height={30}
+                    width={30}
+                    style={{ objectFit: "cover" }}
+                  />
+                ) : (
+                  profileInitials(profile.displayName || "ME")
+                )}
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 600 }}>
+                {profile.displayName || "Profil"}
+              </span>
+              <UserRound size={14} strokeWidth={1.8} />
+            </Link>
           </div>
         </header>
         <div className="content">
