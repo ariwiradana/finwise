@@ -156,6 +156,8 @@ export default function TransactionsPage() {
           t.description,
           t.category,
           t.account,
+          // Include destination account so incoming transfers/deposits are searchable too.
+          t.destinationAccount ?? "",
           t.note ?? "",
           ...t.tags,
         ].some((value) => String(value).toLocaleLowerCase("id-ID").includes(q));
