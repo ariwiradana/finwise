@@ -132,6 +132,10 @@ export default function TransactionsPage() {
   const [account, setAccount] = useState("");
   const [excluded, setExcluded] = useState(false);
   const [note, setNote] = useState("");
+  const [selectedNote, setSelectedNote] = useState<{
+    title: string;
+    content: string;
+  } | null>(null);
   const [tagText, setTagText] = useState("");
   const [destinationAccount, setDestinationAccount] = useState("Cash");
   const [partnerPaid, setPartnerPaid] = useState(false);
@@ -1022,8 +1026,46 @@ export default function TransactionsPage() {
                         <div>
                           <div style={{ fontWeight: 700 }}>{t.description}</div>
                           {t.note && (
-                            <div className="muted" style={{ marginTop: 3 }}>
-                              {t.note}
+                            <div style={{ marginTop: 4, maxWidth: 360 }}>
+                              <div
+                                className="muted"
+                                style={{
+                                  fontSize: 12,
+                                  lineHeight: 1.45,
+                                  overflowWrap: "anywhere",
+                                  display: "-webkit-box",
+                                  WebkitBoxOrient: "vertical",
+                                  WebkitLineClamp: 2,
+                                  overflow: "hidden",
+                                  color: "#737b86",
+                                }}
+                              >
+                                {t.note}
+                              </div>
+                              {t.note.length > 90 && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setSelectedNote({
+                                      title:
+                                        t.description || "Catatan transaksi",
+                                      content: t.note || "",
+                                    })
+                                  }
+                                  style={{
+                                    marginTop: 4,
+                                    padding: 0,
+                                    border: 0,
+                                    background: "transparent",
+                                    color: "#187443",
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  Lihat catatan
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1829,6 +1871,116 @@ export default function TransactionsPage() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+      {selectedNote && (
+        <div
+          role="presentation"
+          onClick={() => setSelectedNote(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            background: "rgba(15, 23, 42, 0.48)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="transaction-note-title"
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 480,
+              maxHeight: "min(80vh, 640px)",
+              overflowY: "auto",
+              background: "var(--panel, #fff)",
+              color: "var(--text, #20252b)",
+              border: "1px solid var(--line, #e4e7ea)",
+              borderRadius: 18,
+              padding: 20,
+              boxShadow: "0 24px 70px rgba(0,0,0,.22)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
+              <div>
+                <div
+                  className="muted"
+                  style={{ fontSize: 12, marginBottom: 5 }}
+                >
+                  Catatan transaksi
+                </div>
+                <h2
+                  id="transaction-note-title"
+                  style={{
+                    margin: 0,
+                    fontSize: 18,
+                    lineHeight: 1.4,
+                    overflowWrap: "anywhere",
+                  }}
+                >
+                  {selectedNote.title}
+                </h2>
+              </div>
+              <button
+                type="button"
+                aria-label="Tutup catatan"
+                onClick={() => setSelectedNote(null)}
+                style={{
+                  border: "1px solid var(--line, #e4e7ea)",
+                  borderRadius: 10,
+                  width: 36,
+                  height: 36,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "transparent",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              >
+                <X size={17} />
+              </button>
+            </div>
+            <div
+              style={{
+                marginTop: 16,
+                whiteSpace: "pre-wrap",
+                overflowWrap: "anywhere",
+                fontSize: 14,
+                lineHeight: 1.7,
+                color: "var(--muted, #737b86)",
+              }}
+            >
+              {selectedNote.content}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                marginTop: 20,
+              }}
+            >
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={() => setSelectedNote(null)}
+              >
+                Tutup
+              </button>
+            </div>
+          </section>
         </div>
       )}
     </>
