@@ -21,6 +21,7 @@ export type LocalTransaction = {
   destinationAccount?: string;
   excludedFromReports: boolean;
   note?: string;
+  attachmentKeys?: string[];
   tags: string[];
   syncStatus: "pending" | "synced" | "conflict";
   createdAt: string;

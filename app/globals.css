@@ -621,3 +621,104 @@ select,
 textarea {
   font-family: inherit;
 }
+
+/* Transaction attachment area: responsive, tidy on mobile/tablet/desktop */
+.transaction-form-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+  margin-top: 8px;
+}
+
+.transaction-attachment-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface, #fbfcfb);
+  box-sizing: border-box;
+}
+
+.transaction-attachment-card > label {
+  display: block;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.transaction-attachment-card > div {
+  min-width: 0;
+}
+
+.transaction-attachment-card img {
+  display: block;
+  width: auto;
+  max-width: min(100%, 240px) !important;
+  max-height: 220px !important;
+  object-fit: contain !important;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.transaction-form-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+
+.transaction-form-buttons button {
+  min-height: 44px;
+}
+
+.transaction-attachment-card .muted {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (min-width: 768px) {
+  .transaction-attachment-card {
+    padding: 18px;
+  }
+
+  .transaction-form-buttons {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 767px) {
+  .transaction-attachment-card {
+    padding: 13px;
+    gap: 10px;
+  }
+
+  .transaction-attachment-card > div {
+    display: flex;
+    align-items: stretch;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .transaction-attachment-card .secondary-btn {
+    min-height: 42px;
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .transaction-form-buttons {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: 8px;
+  }
+
+  .transaction-form-buttons button {
+    width: 100%;
+    min-width: 0;
+    padding: 12px 10px;
+    white-space: normal;
+  }
+}

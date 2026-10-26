@@ -121,6 +121,10 @@ export default function TransactionsPage() {
   const [showForm, setShowForm] = useState(false);
   const [receiptProcessing, setReceiptProcessing] = useState(false);
   const receiptInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentPreview, setAttachmentPreview] = useState<string>("");
+  const [attachmentUploading, setAttachmentUploading] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -132,10 +136,6 @@ export default function TransactionsPage() {
   const [account, setAccount] = useState("");
   const [excluded, setExcluded] = useState(false);
   const [note, setNote] = useState("");
-  const [selectedNote, setSelectedNote] = useState<{
-    title: string;
-    content: string;
-  } | null>(null);
   const [tagText, setTagText] = useState("");
   const [destinationAccount, setDestinationAccount] = useState("Cash");
   const [partnerPaid, setPartnerPaid] = useState(false);
@@ -156,7 +156,6 @@ export default function TransactionsPage() {
           t.description,
           t.category,
           t.account,
-          // Include destination account so incoming transfers/deposits are searchable too.
           t.destinationAccount ?? "",
           t.note ?? "",
           ...t.tags,
@@ -210,6 +209,9 @@ export default function TransactionsPage() {
     setExcluded(false);
     setNote("");
     setTagText("");
+    setAttachmentFile(null);
+    setAttachmentPreview("");
+    if (attachmentInputRef.current) attachmentInputRef.current.value = "";
     setDestinationAccount("Cash");
     setPartnerPaid(false);
     setSplitEnabled(false);
@@ -250,6 +252,13 @@ export default function TransactionsPage() {
     if (!file) return;
 
     setShowForm(true);
+    const preparedAttachment = await prepareReceiptFile(file);
+    setAttachmentFile(preparedAttachment);
+    setAttachmentPreview(
+      preparedAttachment.type.startsWith("image/")
+        ? URL.createObjectURL(preparedAttachment)
+        : "",
+    );
 
     const isPdf =
       file.type === "application/pdf" ||
@@ -828,6 +837,36 @@ export default function TransactionsPage() {
       );
       return;
     }
+    let attachmentKeys: string[] = editingId
+      ? (transactions.find((tx) => tx.id === editingId)?.attachmentKeys ?? [])
+      : [];
+    if (attachmentFile) {
+      setAttachmentUploading(true);
+      try {
+        const uploadForm = new FormData();
+        uploadForm.append("file", attachmentFile);
+        const uploadResponse = await fetch("/api/transaction-attachments", {
+          method: "POST",
+          body: uploadForm,
+        });
+        const uploadPayload = (await uploadResponse
+          .json()
+          .catch(() => ({}))) as { key?: string; error?: string };
+        if (!uploadResponse.ok || !uploadPayload.key)
+          throw new Error(uploadPayload.error || "Gagal mengunggah lampiran.");
+        attachmentKeys = [uploadPayload.key];
+      } catch (uploadError) {
+        toast.error(
+          uploadError instanceof Error
+            ? uploadError.message
+            : "Gagal mengunggah lampiran.",
+        );
+        setAttachmentUploading(false);
+        return;
+      } finally {
+        setAttachmentUploading(false);
+      }
+    }
     const data = {
       type,
       date: new Date(`${date}T12:00:00`).toISOString(),
@@ -844,6 +883,7 @@ export default function TransactionsPage() {
       splitLines,
       excludedFromReports: excluded,
       note: note.trim() || undefined,
+      attachmentKeys,
       tags: tagText
         .split(",")
         .map((s) => s.trim())
@@ -864,6 +904,24 @@ export default function TransactionsPage() {
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Gagal menyimpan transaksi.",
+      );
+    }
+  };
+  const openAttachment = async (key: string) => {
+    try {
+      const response = await fetch(
+        `/api/transaction-attachments?key=${encodeURIComponent(key)}`,
+      );
+      const payload = (await response.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+      };
+      if (!response.ok || !payload.url)
+        throw new Error(payload.error || "Lampiran tidak dapat dibuka.");
+      window.open(payload.url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Lampiran tidak dapat dibuka.",
       );
     }
   };
@@ -1006,6 +1064,7 @@ export default function TransactionsPage() {
               <thead>
                 <tr>
                   <th>Transaksi</th>
+                  <th>Bukti</th>
                   <th>Kategori</th>
                   <th>Akun</th>
                   <th>Tanggal</th>
@@ -1017,66 +1076,27 @@ export default function TransactionsPage() {
               <tbody>
                 {visible.map((t) => (
                   <tr key={t.id}>
-                    <td>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 9,
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontWeight: 700 }}>{t.description}</div>
-                          {t.note && (
-                            <div style={{ marginTop: 4, maxWidth: 360 }}>
-                              <div
-                                className="muted"
-                                style={{
-                                  fontSize: 12,
-                                  lineHeight: 1.45,
-                                  overflowWrap: "anywhere",
-                                  display: "-webkit-box",
-                                  WebkitBoxOrient: "vertical",
-                                  WebkitLineClamp: 2,
-                                  overflow: "hidden",
-                                  color: "#737b86",
-                                }}
-                              >
-                                {t.note}
-                              </div>
-                              {t.note.length > 90 && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setSelectedNote({
-                                      title:
-                                        t.description || "Catatan transaksi",
-                                      content: t.note || "",
-                                    })
-                                  }
-                                  style={{
-                                    marginTop: 4,
-                                    padding: 0,
-                                    border: 0,
-                                    background: "transparent",
-                                    color: "#187443",
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  Lihat catatan
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                    <td data-label="Transaksi">
+                      <div style={{ fontWeight: 700, overflowWrap: "anywhere" }}>{t.description}</div>
                     </td>
-                    <td>{t.category}</td>
-                    <td>{t.account}</td>
-                    <td>{new Date(t.date).toLocaleDateString("id-ID")}</td>
-                    <td>
+                    <td data-label="Bukti">
+                      {!!t.attachmentKeys?.length ? (
+                        <button
+                          type="button"
+                          className="secondary-btn"
+                          style={{ padding: "5px 8px", fontSize: 11, whiteSpace: "nowrap" }}
+                          onClick={() => void openAttachment(t.attachmentKeys![0])}
+                        >
+                          <ReceiptText size={13} /> Lihat bukti
+                        </button>
+                      ) : (
+                        <span className="muted">-</span>
+                      )}
+                    </td>
+                    <td data-label="Kategori">{t.category}</td>
+                    <td data-label="Akun">{t.account}</td>
+                    <td data-label="Tanggal">{new Date(t.date).toLocaleDateString("id-ID")}</td>
+                    <td data-label="Jenis">
                       <div
                         style={{
                           display: "flex",
@@ -1213,6 +1233,7 @@ export default function TransactionsPage() {
                       </div>
                     </td>
                     <td
+                      data-label="Nominal"
                       style={{
                         textAlign: "right",
                         fontWeight: 700,
@@ -1233,8 +1254,8 @@ export default function TransactionsPage() {
                           : ""}
                       {formatIDR(t.amount)}
                     </td>
-                    <td>
-                      <div style={{ display: "flex", gap: 5 }}>
+                    <td data-label="Aksi">
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                         {t.reimburseStatus === "pending" && (
                           <button
                             className="secondary-btn"
@@ -1853,136 +1874,118 @@ export default function TransactionsPage() {
                   </span>
                 </span>
               </label>
-              <div
-                style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}
-              >
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={() => {
-                    setShowForm(false);
-                    reset();
-                  }}
+              <div className="transaction-form-footer">
+                <div className="field transaction-attachment-card" style={{ display: "grid", gap: 10 }}>
+                  <label>Foto struk / bukti transaksi (opsional)</label>
+                  <input
+                    ref={attachmentInputRef}
+                    type="file"
+                    accept="image/*,application/pdf,.pdf"
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (
+                        !(
+                          file.type.startsWith("image/") ||
+                          file.type === "application/pdf" ||
+                          file.name.toLowerCase().endsWith(".pdf")
+                        )
+                      ) {
+                        toast.error("Pilih file gambar atau PDF.");
+                        return;
+                      }
+                      void (async () => {
+                        const prepared = await prepareReceiptFile(file);
+                        setAttachmentFile(prepared);
+                        setAttachmentPreview(
+                          prepared.type.startsWith("image/")
+                            ? URL.createObjectURL(prepared)
+                            : "",
+                        );
+                      })();
+                    }}
+                  />
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={() => attachmentInputRef.current?.click()}
+                    >
+                      <Camera size={14} />{" "}
+                      {attachmentFile
+                        ? "Ganti foto / file"
+                        : "Tambah foto / file"}
+                    </button>
+                    {attachmentFile && (
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        onClick={() => {
+                          setAttachmentFile(null);
+                          setAttachmentPreview("");
+                          if (attachmentInputRef.current)
+                            attachmentInputRef.current.value = "";
+                        }}
+                      >
+                        Hapus lampiran
+                      </button>
+                    )}
+                    {attachmentFile && (
+                      <span className="muted" style={{ fontSize: 12 }}>
+                        {attachmentFile.name}
+                      </span>
+                    )}
+                  </div>
+                  {attachmentPreview && (
+                    <img
+                      src={attachmentPreview}
+                      alt="Preview lampiran transaksi"
+                      style={{
+                        maxWidth: 180,
+                        maxHeight: 180,
+                        objectFit: "cover",
+                        borderRadius: 10,
+                        border: "1px solid var(--line)",
+                      }}
+                    />
+                  )}
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    Foto dari fitur scan nota akan otomatis dipilih sebagai
+                    lampiran. File diunggah ke Cloudflare R2 saat transaksi
+                    disimpan.
+                  </span>
+                </div>
+                <div className="transaction-form-buttons">
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    onClick={() => {
+                      setShowForm(false);
+                      reset();
+                    }}
+                  >
+                    Batal
+                  </button>
+                  <button
+                  type="submit"
+                  className="primary-btn"
+                  disabled={attachmentUploading}
                 >
-                  Batal
-                </button>
-                <button type="submit" className="primary-btn">
                   <Check size={14} />
                   {editingId ? "Simpan perubahan" : "Simpan transaksi"}
-                </button>
+                  </button>
+                </div>
               </div>
             </form>
           </div>
-        </div>
-      )}
-      {selectedNote && (
-        <div
-          role="presentation"
-          onClick={() => setSelectedNote(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 1000,
-            background: "rgba(15, 23, 42, 0.48)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="transaction-note-title"
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: 480,
-              maxHeight: "min(80vh, 640px)",
-              overflowY: "auto",
-              background: "var(--panel, #fff)",
-              color: "var(--text, #20252b)",
-              border: "1px solid var(--line, #e4e7ea)",
-              borderRadius: 18,
-              padding: 20,
-              boxShadow: "0 24px 70px rgba(0,0,0,.22)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                gap: 12,
-              }}
-            >
-              <div>
-                <div
-                  className="muted"
-                  style={{ fontSize: 12, marginBottom: 5 }}
-                >
-                  Catatan transaksi
-                </div>
-                <h2
-                  id="transaction-note-title"
-                  style={{
-                    margin: 0,
-                    fontSize: 18,
-                    lineHeight: 1.4,
-                    overflowWrap: "anywhere",
-                  }}
-                >
-                  {selectedNote.title}
-                </h2>
-              </div>
-              <button
-                type="button"
-                aria-label="Tutup catatan"
-                onClick={() => setSelectedNote(null)}
-                style={{
-                  border: "1px solid var(--line, #e4e7ea)",
-                  borderRadius: 10,
-                  width: 36,
-                  height: 36,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "transparent",
-                  cursor: "pointer",
-                  flexShrink: 0,
-                }}
-              >
-                <X size={17} />
-              </button>
-            </div>
-            <div
-              style={{
-                marginTop: 16,
-                whiteSpace: "pre-wrap",
-                overflowWrap: "anywhere",
-                fontSize: 14,
-                lineHeight: 1.7,
-                color: "var(--muted, #737b86)",
-              }}
-            >
-              {selectedNote.content}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                marginTop: 20,
-              }}
-            >
-              <button
-                type="button"
-                className="primary-btn"
-                onClick={() => setSelectedNote(null)}
-              >
-                Tutup
-              </button>
-            </div>
-          </section>
         </div>
       )}
     </>
