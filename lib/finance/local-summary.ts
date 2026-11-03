@@ -76,8 +76,26 @@ export function transactionCategoryAmount(transaction: LocalTransaction, categor
   }
   if (transaction.splitLines?.length) {
     return transaction.splitLines
-      .filter((split) => split.category === category)
+      .filter((split) => split.category === category && split.excludedFromReports !== true)
       .reduce((sum, split) => sum + split.amount, 0);
   }
   return transaction.category === category ? transaction.amount : 0;
+}
+
+
+/** Amount from a transaction that should contribute to personal expense reports. */
+export function transactionReportableExpenseAmount(transaction: LocalTransaction) {
+  if (transaction.excludedFromReports) return 0;
+  if (transaction.type === 'debt_payment' && transaction.expenseAmount !== undefined && transaction.expenseAmount === 0) return 0;
+  if (transaction.splitLines?.length) {
+    return transaction.splitLines
+      .filter((line) => line.excludedFromReports !== true)
+      .reduce((sum, line) => sum + Number(line.amount || 0), 0);
+  }
+  if (transaction.type === 'debt_payment' && transaction.expenseAmount !== undefined) {
+    return transaction.expenseAmount;
+  }
+  return ['expense', 'asset_purchase', 'debt_payment'].includes(transaction.type)
+    ? transaction.amount
+    : 0;
 }

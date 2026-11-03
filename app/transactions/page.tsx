@@ -125,6 +125,7 @@ export default function TransactionsPage() {
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState<string>("");
   const [attachmentUploading, setAttachmentUploading] = useState(false);
+  const [attachmentPreparing, setAttachmentPreparing] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -141,10 +142,10 @@ export default function TransactionsPage() {
   const [partnerPaid, setPartnerPaid] = useState(false);
   const [splitEnabled, setSplitEnabled] = useState(false);
   const [splitRows, setSplitRows] = useState<
-    { category: string; amount: string; note: string }[]
+    { category: string; amount: string; note: string; excludedFromReports: boolean }[]
   >([
-    { category: "Makan & Minum", amount: "", note: "" },
-    { category: "Transportasi", amount: "", note: "" },
+    { category: "Makan & Minum", amount: "", note: "", excludedFromReports: false },
+    { category: "Transportasi", amount: "", note: "", excludedFromReports: false },
   ]);
   const visible = useMemo(
     () =>
@@ -211,13 +212,15 @@ export default function TransactionsPage() {
     setTagText("");
     setAttachmentFile(null);
     setAttachmentPreview("");
+    setAttachmentPreparing(false);
+    setAttachmentUploading(false);
     if (attachmentInputRef.current) attachmentInputRef.current.value = "";
     setDestinationAccount("Cash");
     setPartnerPaid(false);
     setSplitEnabled(false);
     setSplitRows([
-      { category: "Makan & Minum", amount: "", note: "" },
-      { category: "Transportasi", amount: "", note: "" },
+      { category: "Makan & Minum", amount: "", note: "", excludedFromReports: false },
+      { category: "Transportasi", amount: "", note: "", excludedFromReports: false },
     ]);
     setEditingId(null);
   };
@@ -240,9 +243,10 @@ export default function TransactionsPage() {
         category: x.category,
         amount: String(x.amount),
         note: x.note ?? "",
+        excludedFromReports: Boolean(x.excludedFromReports),
       })) ?? [
-        { category: "Makan & Minum", amount: "", note: "" },
-        { category: "Transportasi", amount: "", note: "" },
+        { category: "Makan & Minum", amount: "", note: "", excludedFromReports: false },
+        { category: "Transportasi", amount: "", note: "", excludedFromReports: false },
       ],
     );
     setShowForm(true);
@@ -252,13 +256,18 @@ export default function TransactionsPage() {
     if (!file) return;
 
     setShowForm(true);
-    const preparedAttachment = await prepareReceiptFile(file);
-    setAttachmentFile(preparedAttachment);
-    setAttachmentPreview(
-      preparedAttachment.type.startsWith("image/")
-        ? URL.createObjectURL(preparedAttachment)
-        : "",
-    );
+    setAttachmentPreparing(true);
+    try {
+      const preparedAttachment = await prepareReceiptFile(file);
+      setAttachmentFile(preparedAttachment);
+      setAttachmentPreview(
+        preparedAttachment.type.startsWith("image/")
+          ? URL.createObjectURL(preparedAttachment)
+          : "",
+      );
+    } finally {
+      setAttachmentPreparing(false);
+    }
 
     const isPdf =
       file.type === "application/pdf" ||
@@ -822,6 +831,7 @@ export default function TransactionsPage() {
           category: x.category,
           amount: Number(x.amount),
           note: x.note.trim() || undefined,
+          excludedFromReports: Boolean(x.excludedFromReports),
         }))
       : undefined;
     if (
@@ -931,6 +941,13 @@ export default function TransactionsPage() {
     await softDelete(id);
     toast.success("Transaksi diarsipkan.");
   };
+  const splitTotal = splitRows.reduce(
+    (sum, row) => sum + (Number(row.amount) || 0),
+    0,
+  );
+  const splitTarget = Number(amount) || 0;
+  const splitRemaining = splitTarget - splitTotal;
+
   return (
     <>
       <input
@@ -1641,7 +1658,7 @@ export default function TransactionsPage() {
                       onClick={() =>
                         setSplitRows((a) => [
                           ...a,
-                          { category: "Lainnya", amount: "", note: "" },
+                          { category: "Lainnya", amount: "", note: "", excludedFromReports: false },
                         ])
                       }
                     >
@@ -1766,6 +1783,37 @@ export default function TransactionsPage() {
                           />
                         </div>
                       </div>
+
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 9,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={Boolean(row.excludedFromReports)}
+                          onChange={(e) =>
+                            setSplitRows((a) =>
+                              a.map((x, j) =>
+                                j === i
+                                  ? { ...x, excludedFromReports: e.target.checked }
+                                  : x,
+                              ),
+                            )
+                          }
+                        />
+                        <span>
+                          Kecualikan kategori ini dari laporan
+                          <span className="muted" style={{ display: "block", fontWeight: 400, marginTop: 3 }}>
+                            Nominal tetap tercatat, tetapi tidak dihitung dalam laporan dan budget.
+                          </span>
+                        </span>
+                      </label>
                     </div>
                   ))}
 
@@ -1814,21 +1862,30 @@ export default function TransactionsPage() {
                       </strong>
                     </div>
 
-                    {splitRows.reduce(
-                      (sum, row) => sum + Number(row.amount || 0),
-                      0,
-                    ) !== Number(amount || 0) && (
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: "#b54708",
-                          background: "#fffaeb",
-                          borderRadius: 8,
-                          padding: 10,
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        Total split belum sama dengan nominal transaksi.
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 12,
+                        padding: "10px 12px",
+                        borderRadius: 9,
+                        background: splitRemaining === 0 ? "#ecfdf3" : splitRemaining > 0 ? "#fffaeb" : "#fef3f2",
+                        color: splitRemaining === 0 ? "#067647" : splitRemaining > 0 ? "#b54708" : "#b42318",
+                      }}
+                    >
+                      <span style={{ fontSize: 12, fontWeight: 600 }}>
+                        {splitRemaining === 0 ? "Sisa nominal" : splitRemaining > 0 ? "Sisa belum dialokasikan" : "Kelebihan split"}
+                      </span>
+                      <strong style={{ fontSize: 14, fontVariantNumeric: "tabular-nums" }}>
+                        {formatIDR(Math.abs(splitRemaining))}
+                      </strong>
+                    </div>
+                    {splitRemaining !== 0 && (
+                      <div style={{ fontSize: 12, color: splitRemaining < 0 ? "#b42318" : "#b54708", lineHeight: 1.5 }}>
+                        {splitRemaining > 0
+                          ? "Masih ada nominal yang belum dibagi ke kategori."
+                          : "Total rincian melebihi nominal transaksi. Kurangi nominal split."}
                       </div>
                     )}
                   </div>
@@ -1896,13 +1953,20 @@ export default function TransactionsPage() {
                         return;
                       }
                       void (async () => {
-                        const prepared = await prepareReceiptFile(file);
-                        setAttachmentFile(prepared);
-                        setAttachmentPreview(
-                          prepared.type.startsWith("image/")
-                            ? URL.createObjectURL(prepared)
-                            : "",
-                        );
+                        setAttachmentPreparing(true);
+                        try {
+                          const prepared = await prepareReceiptFile(file);
+                          setAttachmentFile(prepared);
+                          setAttachmentPreview(
+                            prepared.type.startsWith("image/")
+                              ? URL.createObjectURL(prepared)
+                              : "",
+                          );
+                        } catch (error) {
+                          toast.error(error instanceof Error ? error.message : "Gagal menyiapkan lampiran.");
+                        } finally {
+                          setAttachmentPreparing(false);
+                        }
                       })();
                     }}
                   />
@@ -1917,6 +1981,7 @@ export default function TransactionsPage() {
                     <button
                       type="button"
                       className="secondary-btn"
+                      disabled={attachmentPreparing || attachmentUploading}
                       onClick={() => attachmentInputRef.current?.click()}
                     >
                       <Camera size={14} />{" "}
@@ -1944,6 +2009,27 @@ export default function TransactionsPage() {
                       </span>
                     )}
                   </div>
+                  {(attachmentPreparing || attachmentUploading) && (
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 9,
+                        padding: "10px 12px",
+                        borderRadius: 9,
+                        border: "1px solid #b7d7c4",
+                        background: "#f0f9f3",
+                        color: "#176b43",
+                        fontSize: 13,
+                        fontWeight: 600,
+                      }}
+                    >
+                      <LoaderCircle size={16} className="animate-spin" />
+                      {attachmentPreparing ? "Menyiapkan foto dan membuat preview..." : "Mengunggah bukti ke Cloudflare R2..."}
+                    </div>
+                  )}
                   {attachmentPreview && (
                     <img
                       src={attachmentPreview}
@@ -1977,10 +2063,14 @@ export default function TransactionsPage() {
                   <button
                   type="submit"
                   className="primary-btn"
-                  disabled={attachmentUploading}
+                  disabled={attachmentUploading || attachmentPreparing}
                 >
-                  <Check size={14} />
-                  {editingId ? "Simpan perubahan" : "Simpan transaksi"}
+                  {attachmentUploading || attachmentPreparing ? (
+                    <LoaderCircle size={14} className="animate-spin" />
+                  ) : (
+                    <Check size={14} />
+                  )}
+                  {attachmentPreparing ? "Menyiapkan foto..." : attachmentUploading ? "Mengunggah bukti..." : editingId ? "Simpan perubahan" : "Simpan transaksi"}
                   </button>
                 </div>
               </div>

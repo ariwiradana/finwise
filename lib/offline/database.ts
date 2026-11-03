@@ -27,7 +27,12 @@ export type LocalTransaction = {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
-  splitLines?: { category: string; amount: number; note?: string }[];
+  splitLines?: {
+    category: string;
+    amount: number;
+    note?: string;
+    excludedFromReports?: boolean;
+  }[];
   relatedId?: string;
   partnerPaid?: boolean;
   expenseAmount?: number;

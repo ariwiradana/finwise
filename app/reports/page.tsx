@@ -8,6 +8,7 @@ import { localDB } from "@/lib/offline/database";
 import {
   localNetWorth,
   transactionCategoryAmount,
+  transactionReportableExpenseAmount,
 } from "@/lib/finance/local-summary";
 import { isTransactionExcludedFromReports } from "@/lib/finance/report-exclusions";
 export default function ReportsPage() {
@@ -50,14 +51,7 @@ export default function ReportsPage() {
       .filter((t) =>
         ["expense", "asset_purchase", "debt_payment"].includes(t.type),
       )
-      .reduce(
-        (s, t) =>
-          s +
-          (t.type === "debt_payment"
-            ? (t.expenseAmount ?? t.amount)
-            : t.amount),
-        0,
-      );
+      .reduce((s, t) => s + transactionReportableExpenseAmount(t), 0);
     const refunds = filtered
       .filter((t) => t.type === "refund")
       .reduce((s, t) => s + t.amount, 0);
@@ -77,7 +71,14 @@ export default function ReportsPage() {
             "reimburse_payment",
           ].includes(t.type) && !t.partnerPaid,
       )
-      .reduce((s, t) => s + t.amount, 0);
+      .reduce(
+        (s, t) =>
+          s +
+          (t.type === "expense" || t.type === "asset_purchase" || t.type === "debt_payment"
+            ? transactionReportableExpenseAmount(t)
+            : t.amount),
+        0,
+      );
     const byCategory = new Map<string, number>();
     filtered
       .filter((t) =>
@@ -97,12 +98,14 @@ export default function ReportsPage() {
           return;
         }
         if (t.splitLines?.length) {
-          t.splitLines.forEach((line) =>
-            byCategory.set(
-              line.category,
-              (byCategory.get(line.category) ?? 0) + line.amount,
-            ),
-          );
+          t.splitLines
+            .filter((line) => line.excludedFromReports !== true)
+            .forEach((line) =>
+              byCategory.set(
+                line.category,
+                (byCategory.get(line.category) ?? 0) + line.amount,
+              ),
+            );
         } else
           byCategory.set(
             t.category,
