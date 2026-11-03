@@ -1366,7 +1366,7 @@ export default function TransactionsPage() {
                             }}
                           >
                             <FileMinus size={12} />
-                            Dikecualikan dari laporan
+                            Dikecualikan
                           </span>
                         )}
                       </div>
