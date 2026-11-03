@@ -128,6 +128,25 @@ export default function TransactionsPage() {
   const [attachmentPreparing, setAttachmentPreparing] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
+  const [selectedYear, setSelectedYear] = useState(
+    String(new Date().getFullYear()),
+  );
+  const [selectedMonth, setSelectedMonth] = useState("all");
+  const availableYears = useMemo(() => {
+    const years = new Set(
+      transactions.map((t) => String(new Date(t.date).getFullYear())),
+    );
+    years.add(String(new Date().getFullYear()));
+    return Array.from(years).sort((a, b) => Number(b) - Number(a));
+  }, [transactions]);
+  const availableMonths = useMemo(() => {
+    const months = new Set(
+      transactions
+        .filter((t) => String(new Date(t.date).getFullYear()) === selectedYear)
+        .map((t) => String(new Date(t.date).getMonth() + 1).padStart(2, "0")),
+    );
+    return Array.from(months).sort((a, b) => Number(a) - Number(b));
+  }, [transactions, selectedYear]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [type, setType] = useState<TxType>("expense");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -142,10 +161,25 @@ export default function TransactionsPage() {
   const [partnerPaid, setPartnerPaid] = useState(false);
   const [splitEnabled, setSplitEnabled] = useState(false);
   const [splitRows, setSplitRows] = useState<
-    { category: string; amount: string; note: string; excludedFromReports: boolean }[]
+    {
+      category: string;
+      amount: string;
+      note: string;
+      excludedFromReports: boolean;
+    }[]
   >([
-    { category: "Makan & Minum", amount: "", note: "", excludedFromReports: false },
-    { category: "Transportasi", amount: "", note: "", excludedFromReports: false },
+    {
+      category: "Makan & Minum",
+      amount: "",
+      note: "",
+      excludedFromReports: false,
+    },
+    {
+      category: "Transportasi",
+      amount: "",
+      note: "",
+      excludedFromReports: false,
+    },
   ]);
   const visible = useMemo(
     () =>
@@ -196,9 +230,14 @@ export default function TransactionsPage() {
             break;
         }
 
-        return matchesQuery && matchesFilter;
+        const txDate = new Date(t.date);
+        const matchesYear = String(txDate.getFullYear()) === selectedYear;
+        const matchesMonth =
+          selectedMonth === "all" ||
+          String(txDate.getMonth() + 1).padStart(2, "0") === selectedMonth;
+        return matchesQuery && matchesFilter && matchesYear && matchesMonth;
       }),
-    [transactions, query, filter],
+    [transactions, query, filter, selectedYear, selectedMonth],
   );
   const reset = () => {
     setType("expense");
@@ -219,8 +258,18 @@ export default function TransactionsPage() {
     setPartnerPaid(false);
     setSplitEnabled(false);
     setSplitRows([
-      { category: "Makan & Minum", amount: "", note: "", excludedFromReports: false },
-      { category: "Transportasi", amount: "", note: "", excludedFromReports: false },
+      {
+        category: "Makan & Minum",
+        amount: "",
+        note: "",
+        excludedFromReports: false,
+      },
+      {
+        category: "Transportasi",
+        amount: "",
+        note: "",
+        excludedFromReports: false,
+      },
     ]);
     setEditingId(null);
   };
@@ -245,8 +294,18 @@ export default function TransactionsPage() {
         note: x.note ?? "",
         excludedFromReports: Boolean(x.excludedFromReports),
       })) ?? [
-        { category: "Makan & Minum", amount: "", note: "", excludedFromReports: false },
-        { category: "Transportasi", amount: "", note: "", excludedFromReports: false },
+        {
+          category: "Makan & Minum",
+          amount: "",
+          note: "",
+          excludedFromReports: false,
+        },
+        {
+          category: "Transportasi",
+          amount: "",
+          note: "",
+          excludedFromReports: false,
+        },
       ],
     );
     setShowForm(true);
@@ -1039,7 +1098,58 @@ export default function TransactionsPage() {
               }}
             />
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
+            <select
+              aria-label="Filter tahun"
+              value={selectedYear}
+              onChange={(e) => {
+                setSelectedYear(e.target.value);
+                setSelectedMonth("all");
+              }}
+              style={{
+                border: "1px solid #e1e4e8",
+                borderRadius: 9,
+                padding: "10px 12px",
+                fontSize: 12,
+                background: "#fff",
+              }}
+            >
+              {availableYears.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Filter bulan"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              style={{
+                border: "1px solid #e1e4e8",
+                borderRadius: 9,
+                padding: "10px 12px",
+                fontSize: 12,
+                background: "#fff",
+              }}
+            >
+              <option value="all">Semua bulan</option>
+              {availableMonths.map((month) => (
+                <option key={month} value={month}>
+                  {new Date(
+                    Number(selectedYear),
+                    Number(month) - 1,
+                    1,
+                  ).toLocaleDateString("id-ID", { month: "long" })}
+                </option>
+              ))}
+            </select>
             <SlidersHorizontal size={15} color="#8a9098" />
             <select
               value={filter}
@@ -1094,15 +1204,25 @@ export default function TransactionsPage() {
                 {visible.map((t) => (
                   <tr key={t.id}>
                     <td data-label="Transaksi">
-                      <div style={{ fontWeight: 700, overflowWrap: "anywhere" }}>{t.description}</div>
+                      <div
+                        style={{ fontWeight: 700, overflowWrap: "anywhere" }}
+                      >
+                        {t.description}
+                      </div>
                     </td>
                     <td data-label="Bukti">
                       {!!t.attachmentKeys?.length ? (
                         <button
                           type="button"
                           className="secondary-btn"
-                          style={{ padding: "5px 8px", fontSize: 11, whiteSpace: "nowrap" }}
-                          onClick={() => void openAttachment(t.attachmentKeys![0])}
+                          style={{
+                            padding: "5px 8px",
+                            fontSize: 11,
+                            whiteSpace: "nowrap",
+                          }}
+                          onClick={() =>
+                            void openAttachment(t.attachmentKeys![0])
+                          }
                         >
                           <ReceiptText size={13} /> Lihat bukti
                         </button>
@@ -1112,7 +1232,9 @@ export default function TransactionsPage() {
                     </td>
                     <td data-label="Kategori">{t.category}</td>
                     <td data-label="Akun">{t.account}</td>
-                    <td data-label="Tanggal">{new Date(t.date).toLocaleDateString("id-ID")}</td>
+                    <td data-label="Tanggal">
+                      {new Date(t.date).toLocaleDateString("id-ID")}
+                    </td>
                     <td data-label="Jenis">
                       <div
                         style={{
@@ -1272,7 +1394,9 @@ export default function TransactionsPage() {
                       {formatIDR(t.amount)}
                     </td>
                     <td data-label="Aksi">
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      <div
+                        style={{ display: "flex", gap: 5, flexWrap: "wrap" }}
+                      >
                         {t.reimburseStatus === "pending" && (
                           <button
                             className="secondary-btn"
@@ -1658,7 +1782,12 @@ export default function TransactionsPage() {
                       onClick={() =>
                         setSplitRows((a) => [
                           ...a,
-                          { category: "Lainnya", amount: "", note: "", excludedFromReports: false },
+                          {
+                            category: "Lainnya",
+                            amount: "",
+                            note: "",
+                            excludedFromReports: false,
+                          },
                         ])
                       }
                     >
@@ -1801,7 +1930,10 @@ export default function TransactionsPage() {
                             setSplitRows((a) =>
                               a.map((x, j) =>
                                 j === i
-                                  ? { ...x, excludedFromReports: e.target.checked }
+                                  ? {
+                                      ...x,
+                                      excludedFromReports: e.target.checked,
+                                    }
                                   : x,
                               ),
                             )
@@ -1809,8 +1941,16 @@ export default function TransactionsPage() {
                         />
                         <span>
                           Kecualikan kategori ini dari laporan
-                          <span className="muted" style={{ display: "block", fontWeight: 400, marginTop: 3 }}>
-                            Nominal tetap tercatat, tetapi tidak dihitung dalam laporan dan budget.
+                          <span
+                            className="muted"
+                            style={{
+                              display: "block",
+                              fontWeight: 400,
+                              marginTop: 3,
+                            }}
+                          >
+                            Nominal tetap tercatat, tetapi tidak dihitung dalam
+                            laporan dan budget.
                           </span>
                         </span>
                       </label>
@@ -1870,19 +2010,44 @@ export default function TransactionsPage() {
                         gap: 12,
                         padding: "10px 12px",
                         borderRadius: 9,
-                        background: splitRemaining === 0 ? "#ecfdf3" : splitRemaining > 0 ? "#fffaeb" : "#fef3f2",
-                        color: splitRemaining === 0 ? "#067647" : splitRemaining > 0 ? "#b54708" : "#b42318",
+                        background:
+                          splitRemaining === 0
+                            ? "#ecfdf3"
+                            : splitRemaining > 0
+                              ? "#fffaeb"
+                              : "#fef3f2",
+                        color:
+                          splitRemaining === 0
+                            ? "#067647"
+                            : splitRemaining > 0
+                              ? "#b54708"
+                              : "#b42318",
                       }}
                     >
                       <span style={{ fontSize: 12, fontWeight: 600 }}>
-                        {splitRemaining === 0 ? "Sisa nominal" : splitRemaining > 0 ? "Sisa belum dialokasikan" : "Kelebihan split"}
+                        {splitRemaining === 0
+                          ? "Sisa nominal"
+                          : splitRemaining > 0
+                            ? "Sisa belum dialokasikan"
+                            : "Kelebihan split"}
                       </span>
-                      <strong style={{ fontSize: 14, fontVariantNumeric: "tabular-nums" }}>
+                      <strong
+                        style={{
+                          fontSize: 14,
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
                         {formatIDR(Math.abs(splitRemaining))}
                       </strong>
                     </div>
                     {splitRemaining !== 0 && (
-                      <div style={{ fontSize: 12, color: splitRemaining < 0 ? "#b42318" : "#b54708", lineHeight: 1.5 }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: splitRemaining < 0 ? "#b42318" : "#b54708",
+                          lineHeight: 1.5,
+                        }}
+                      >
                         {splitRemaining > 0
                           ? "Masih ada nominal yang belum dibagi ke kategori."
                           : "Total rincian melebihi nominal transaksi. Kurangi nominal split."}
@@ -1932,7 +2097,10 @@ export default function TransactionsPage() {
                 </span>
               </label>
               <div className="transaction-form-footer">
-                <div className="field transaction-attachment-card" style={{ display: "grid", gap: 10 }}>
+                <div
+                  className="field transaction-attachment-card"
+                  style={{ display: "grid", gap: 10 }}
+                >
                   <label>Foto struk / bukti transaksi (opsional)</label>
                   <input
                     ref={attachmentInputRef}
@@ -1963,7 +2131,11 @@ export default function TransactionsPage() {
                               : "",
                           );
                         } catch (error) {
-                          toast.error(error instanceof Error ? error.message : "Gagal menyiapkan lampiran.");
+                          toast.error(
+                            error instanceof Error
+                              ? error.message
+                              : "Gagal menyiapkan lampiran.",
+                          );
                         } finally {
                           setAttachmentPreparing(false);
                         }
@@ -2027,7 +2199,9 @@ export default function TransactionsPage() {
                       }}
                     >
                       <LoaderCircle size={16} className="animate-spin" />
-                      {attachmentPreparing ? "Menyiapkan foto dan membuat preview..." : "Mengunggah bukti ke Cloudflare R2..."}
+                      {attachmentPreparing
+                        ? "Menyiapkan foto dan membuat preview..."
+                        : "Mengunggah bukti ke Cloudflare R2..."}
                     </div>
                   )}
                   {attachmentPreview && (
@@ -2061,16 +2235,22 @@ export default function TransactionsPage() {
                     Batal
                   </button>
                   <button
-                  type="submit"
-                  className="primary-btn"
-                  disabled={attachmentUploading || attachmentPreparing}
-                >
-                  {attachmentUploading || attachmentPreparing ? (
-                    <LoaderCircle size={14} className="animate-spin" />
-                  ) : (
-                    <Check size={14} />
-                  )}
-                  {attachmentPreparing ? "Menyiapkan foto..." : attachmentUploading ? "Mengunggah bukti..." : editingId ? "Simpan perubahan" : "Simpan transaksi"}
+                    type="submit"
+                    className="primary-btn"
+                    disabled={attachmentUploading || attachmentPreparing}
+                  >
+                    {attachmentUploading || attachmentPreparing ? (
+                      <LoaderCircle size={14} className="animate-spin" />
+                    ) : (
+                      <Check size={14} />
+                    )}
+                    {attachmentPreparing
+                      ? "Menyiapkan foto..."
+                      : attachmentUploading
+                        ? "Mengunggah bukti..."
+                        : editingId
+                          ? "Simpan perubahan"
+                          : "Simpan transaksi"}
                   </button>
                 </div>
               </div>

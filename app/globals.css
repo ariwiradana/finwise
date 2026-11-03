@@ -722,3 +722,94 @@ textarea {
     white-space: normal;
   }
 }
+
+
+/* Account list: comfortable stacked layout on narrow screens */
+@media (max-width: 767px) {
+  .account-table-wrap {
+    overflow: visible;
+  }
+
+  .account-table-wrap table,
+  .account-table-wrap tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .account-table-wrap thead {
+    display: none;
+  }
+
+  .account-table-wrap tbody {
+    display: grid;
+    gap: 12px;
+  }
+
+  .account-table-wrap tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 12px 14px;
+    min-width: 0;
+  }
+
+  .account-table-wrap tbody td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    width: 100%;
+    min-width: 0;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line, #e5e7eb);
+    text-align: right;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+  }
+
+  .account-table-wrap tbody td::before {
+    content: attr(data-label);
+    flex: 0 1 44%;
+    max-width: 44%;
+    color: var(--muted, #777);
+    font-size: 12px;
+    font-weight: 700;
+    text-align: left;
+    overflow-wrap: normal;
+  }
+
+  .account-table-wrap tbody td:last-child {
+    border-bottom: 0;
+    display: block;
+    padding-top: 12px;
+  }
+
+  .account-table-wrap tbody td:last-child::before {
+    display: block;
+    max-width: none;
+    margin-bottom: 9px;
+  }
+
+  .account-table-wrap .account-row-actions {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px !important;
+    width: 100%;
+  }
+
+  .account-table-wrap .account-row-actions .secondary-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+    min-height: 42px;
+    padding: 9px 10px;
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+    line-height: 1.25;
+    text-align: center;
+  }
+}

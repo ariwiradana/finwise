@@ -32,6 +32,9 @@ export function accountBalances(
                 if (['income', 'receivable_payment'].includes(transaction.type)) return sum + transaction.amount;
                 if (['expense', 'asset_purchase', 'debt_payment', 'reimburse_payment'].includes(transaction.type)) return sum - transaction.amount;
                 if (transaction.type === 'refund') return sum + transaction.amount;
+                if (transaction.type === 'adjustment') {
+                  return sum + Number(transaction.adjustmentDelta ?? transaction.amount);
+                }
                 return sum;
               }, 0)),
     }));

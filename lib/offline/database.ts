@@ -36,6 +36,7 @@ export type LocalTransaction = {
   relatedId?: string;
   partnerPaid?: boolean;
   expenseAmount?: number;
+  adjustmentDelta?: number;
   incomeAmount?: number;
   principalPaid?: number;
   interestPaid?: number;
