@@ -132,6 +132,7 @@ export default function TransactionsPage() {
     String(new Date().getFullYear()),
   );
   const [selectedMonth, setSelectedMonth] = useState("all");
+  const [selectedAccount, setSelectedAccount] = useState("all");
   const availableYears = useMemo(() => {
     const years = new Set(
       transactions.map((t) => String(new Date(t.date).getFullYear())),
@@ -235,9 +236,19 @@ export default function TransactionsPage() {
         const matchesMonth =
           selectedMonth === "all" ||
           String(txDate.getMonth() + 1).padStart(2, "0") === selectedMonth;
-        return matchesQuery && matchesFilter && matchesYear && matchesMonth;
+        const matchesAccount =
+          selectedAccount === "all" ||
+          t.account === selectedAccount ||
+          t.destinationAccount === selectedAccount;
+        return (
+          matchesQuery &&
+          matchesFilter &&
+          matchesYear &&
+          matchesMonth &&
+          matchesAccount
+        );
       }),
-    [transactions, query, filter, selectedYear, selectedMonth],
+    [transactions, query, filter, selectedYear, selectedMonth, selectedAccount],
   );
   const reset = () => {
     setType("expense");
@@ -1152,6 +1163,33 @@ export default function TransactionsPage() {
             </select>
             <SlidersHorizontal size={15} color="#8a9098" />
             <select
+              aria-label="Filter akun"
+              value={selectedAccount}
+              onChange={(e) => setSelectedAccount(e.target.value)}
+              style={{
+                border: "1px solid #e1e4e8",
+                borderRadius: 9,
+                padding: "10px 12px",
+                fontSize: 12,
+                background: "#fff",
+              }}
+            >
+              <option value="all">Semua akun</option>
+              {Array.from(
+                new Set(
+                  accountRecords
+                    .map((accountRecord) => accountRecord.name)
+                    .filter(Boolean),
+                ),
+              )
+                .sort((a, b) => a.localeCompare(b, "id-ID"))
+                .map((accountName) => (
+                  <option key={accountName} value={accountName}>
+                    {accountName}
+                  </option>
+                ))}
+            </select>
+            <select
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               style={{
@@ -1366,7 +1404,7 @@ export default function TransactionsPage() {
                             }}
                           >
                             <FileMinus size={12} />
-                            Dikecualikan
+                            Dikecualikan dari laporan
                           </span>
                         )}
                       </div>

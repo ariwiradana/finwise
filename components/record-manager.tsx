@@ -411,8 +411,7 @@ export function RecordManager({
                             }
                           }}
                         >
-                          <Trash size={13} />
-                          Hapus
+                          <Trash size={13} /> Hapus
                         </button>
                       </div>
                     </td>
