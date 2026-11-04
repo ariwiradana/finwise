@@ -1,5 +1,5 @@
 "use client";
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeftRight,
   Check,
@@ -133,55 +133,10 @@ export default function TransactionsPage() {
   );
   const [selectedMonth, setSelectedMonth] = useState("all");
   const [selectedAccount, setSelectedAccount] = useState("all");
-  const availableYears = useMemo(() => {
-    const years = new Set(
-      transactions.map((t) => String(new Date(t.date).getFullYear())),
-    );
-    years.add(String(new Date().getFullYear()));
-    return Array.from(years).sort((a, b) => Number(b) - Number(a));
-  }, [transactions]);
-  const availableMonths = useMemo(() => {
-    const months = new Set(
-      transactions
-        .filter((t) => String(new Date(t.date).getFullYear()) === selectedYear)
-        .map((t) => String(new Date(t.date).getMonth() + 1).padStart(2, "0")),
-    );
-    return Array.from(months).sort((a, b) => Number(a) - Number(b));
-  }, [transactions, selectedYear]);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [type, setType] = useState<TxType>("expense");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("Makan & Minum");
-  const [account, setAccount] = useState("");
-  const [excluded, setExcluded] = useState(false);
-  const [note, setNote] = useState("");
-  const [tagText, setTagText] = useState("");
-  const [destinationAccount, setDestinationAccount] = useState("Cash");
-  const [partnerPaid, setPartnerPaid] = useState(false);
-  const [splitEnabled, setSplitEnabled] = useState(false);
-  const [splitRows, setSplitRows] = useState<
-    {
-      category: string;
-      amount: string;
-      note: string;
-      excludedFromReports: boolean;
-    }[]
-  >([
-    {
-      category: "Makan & Minum",
-      amount: "",
-      note: "",
-      excludedFromReports: false,
-    },
-    {
-      category: "Transportasi",
-      amount: "",
-      note: "",
-      excludedFromReports: false,
-    },
-  ]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
+  const transactionListRef = useRef<HTMLDivElement>(null);
+
   const visible = useMemo(
     () =>
       transactions.filter((t) => {
@@ -250,6 +205,79 @@ export default function TransactionsPage() {
       }),
     [transactions, query, filter, selectedYear, selectedMonth, selectedAccount],
   );
+
+  const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const paginatedTransactions = visible.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [query, filter, selectedYear, selectedMonth, selectedAccount]);
+  useEffect(() => {
+    if (currentPage > 1) {
+      const element = transactionListRef.current;
+      if (element) {
+        const top = element.getBoundingClientRect().top + window.scrollY - 240;
+
+        window.scrollTo({
+          top,
+          behavior: "smooth",
+        });
+      }
+    }
+  }, [currentPage]);
+
+  const availableYears = useMemo(() => {
+    const years = new Set(
+      transactions.map((t) => String(new Date(t.date).getFullYear())),
+    );
+    years.add(String(new Date().getFullYear()));
+    return Array.from(years).sort((a, b) => Number(b) - Number(a));
+  }, [transactions]);
+  const availableMonths = useMemo(() => {
+    const months = new Set(
+      transactions
+        .filter((t) => String(new Date(t.date).getFullYear()) === selectedYear)
+        .map((t) => String(new Date(t.date).getMonth() + 1).padStart(2, "0")),
+    );
+    return Array.from(months).sort((a, b) => Number(a) - Number(b));
+  }, [transactions, selectedYear]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [type, setType] = useState<TxType>("expense");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("Makan & Minum");
+  const [account, setAccount] = useState("");
+  const [excluded, setExcluded] = useState(false);
+  const [note, setNote] = useState("");
+  const [tagText, setTagText] = useState("");
+  const [destinationAccount, setDestinationAccount] = useState("Cash");
+  const [partnerPaid, setPartnerPaid] = useState(false);
+  const [splitEnabled, setSplitEnabled] = useState(false);
+  const [splitRows, setSplitRows] = useState<
+    {
+      category: string;
+      amount: string;
+      note: string;
+      excludedFromReports: boolean;
+    }[]
+  >([
+    {
+      category: "Makan & Minum",
+      amount: "",
+      note: "",
+      excludedFromReports: false,
+    },
+    {
+      category: "Transportasi",
+      amount: "",
+      note: "",
+      excludedFromReports: false,
+    },
+  ]);
+
   const reset = () => {
     setType("expense");
     setDate(new Date().toISOString().slice(0, 10));
@@ -1205,8 +1233,8 @@ export default function TransactionsPage() {
               <option value="expense">Pengeluaran</option>
               <option value="transfer">Transfer</option>
               <option value="included">Masuk laporan</option>
-              <option value="excluded">Dikecualikan dari laporan</option>
-              <option value="reimburse">Menunggu reimburse</option>
+              <option value="excluded">Excluded</option>
+              <option value="reimburse">Pending</option>
             </select>
           </div>
         </div>
@@ -1224,7 +1252,7 @@ export default function TransactionsPage() {
             </div>
           </div>
         ) : (
-          <div className="table-wrap">
+          <div className="table-wrap" ref={transactionListRef}>
             <table>
               <thead>
                 <tr>
@@ -1239,7 +1267,7 @@ export default function TransactionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {visible.map((t) => (
+                {paginatedTransactions.map((t) => (
                   <tr key={t.id}>
                     <td data-label="Transaksi">
                       <div
@@ -1293,13 +1321,13 @@ export default function TransactionsPage() {
                             }
                           > = {
                             income: {
-                              label: "Pemasukan",
+                              label: "Masuk",
                               color: "#187443",
                               background: "#E5F5EB",
                               icon: <TrendingUp size={12} />,
                             },
                             expense: {
-                              label: "Pengeluaran",
+                              label: "Keluar",
                               color: "#B42318",
                               background: "#FDEAEA",
                               icon: <TrendingDown size={12} />,
@@ -1317,31 +1345,31 @@ export default function TransactionsPage() {
                               icon: <RotateCcw size={12} />,
                             },
                             asset_purchase: {
-                              label: "Pembelian aset",
+                              label: "Aset",
                               color: "#6941C6",
                               background: "#F0EAFE",
                               icon: <Wallet size={12} />,
                             },
                             debt_payment: {
-                              label: "Pembayaran utang",
+                              label: "Utang",
                               color: "#9A5B00",
                               background: "#FFF0D6",
                               icon: <CreditCard size={12} />,
                             },
                             receivable_payment: {
-                              label: "Penerimaan piutang",
+                              label: "Piutang",
                               color: "#087E70",
                               background: "#E0F7F3",
                               icon: <HandCoins size={12} />,
                             },
                             reimburse_payment: {
-                              label: "Pembayaran reimburse",
+                              label: "Reimburse",
                               color: "#2458A6",
                               background: "#E8F0FE",
                               icon: <Wallet size={12} />,
                             },
                             adjustment: {
-                              label: "Penyesuaian",
+                              label: "Koreksi",
                               color: "#596579",
                               background: "#EEF1F5",
                               icon: <SlidersHorizontal size={12} />,
@@ -1387,7 +1415,7 @@ export default function TransactionsPage() {
                             }}
                           >
                             <Clock3 size={12} />
-                            Menunggu reimburse
+                            Pending
                           </span>
                         )}
 
@@ -1404,7 +1432,7 @@ export default function TransactionsPage() {
                             }}
                           >
                             <FileMinus size={12} />
-                            Dikecualikan dari laporan
+                            Excluded
                           </span>
                         )}
                       </div>
@@ -1491,6 +1519,47 @@ export default function TransactionsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {ready && visible.length > pageSize && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+              paddingTop: 14,
+            }}
+          >
+            <span className="muted" style={{ fontSize: 12 }}>
+              Menampilkan {(currentPage - 1) * pageSize + 1}–
+              {Math.min(currentPage * pageSize, visible.length)} dari{" "}
+              {visible.length} transaksi
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button
+                type="button"
+                className="secondary-btn"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                Sebelumnya
+              </button>
+              <span style={{ fontSize: 12, fontWeight: 700 }}>
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                type="button"
+                className="secondary-btn"
+                disabled={currentPage >= totalPages}
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
+              >
+                Berikutnya
+              </button>
+            </div>
           </div>
         )}
       </section>

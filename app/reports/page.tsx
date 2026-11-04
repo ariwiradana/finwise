@@ -17,12 +17,31 @@ export default function ReportsPage() {
   const { records: assets } = useLocalRecords("assets");
   const { records: debts } = useLocalRecords("debts");
   const [period, setPeriod] = useState("all");
+  const availablePeriods = useMemo(() => {
+    return Array.from(
+      new Set(
+        transactions
+          .map((t) => {
+            const date = new Date(t.date);
+            if (Number.isNaN(date.getTime())) return null;
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+          })
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ).sort((a, b) => b.localeCompare(a));
+  }, [transactions]);
   const [privacy, setPrivacy] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   useEffect(() => {
     void localDB?.settings
       .get("privacy")
       .then((x) => setPrivacy(Boolean(x?.value)));
   }, []);
+  useEffect(() => {
+    if (period !== "all" && !availablePeriods.includes(period)) {
+      setPeriod("all");
+    }
+  }, [period, availablePeriods]);
   const money = (n: number) => (privacy ? "••••••" : formatIDR(n));
   const report = useMemo(() => {
     const today = new Date();
@@ -32,10 +51,9 @@ export default function ReportsPage() {
     const filtered = included.filter((t) => {
       if (period === "all") return true;
       const d = new Date(t.date);
-      return (
-        d.getFullYear() === today.getFullYear() &&
-        d.getMonth() === today.getMonth()
-      );
+      if (Number.isNaN(d.getTime())) return false;
+      const transactionPeriod = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      return transactionPeriod === period;
     });
     const income = filtered
       .filter((t) => t.type === "income" || t.type === "receivable_payment")
@@ -80,6 +98,12 @@ export default function ReportsPage() {
         0,
       );
     const byCategory = new Map<string, number>();
+    const categoryDetails = new Map<string, Array<{ id: string; date: string; description: string; amount: number; type: string }>>();
+    const addCategoryDetail = (category: string, t: (typeof filtered)[number], amount: number) => {
+      const rows = categoryDetails.get(category) ?? [];
+      rows.push({ id: t.id, date: t.date, description: t.description || t.category, amount, type: t.type });
+      categoryDetails.set(category, rows);
+    };
     filtered
       .filter((t) =>
         ["expense", "asset_purchase", "debt_payment"].includes(t.type),
@@ -90,40 +114,44 @@ export default function ReportsPage() {
           t.expenseAmount !== undefined &&
           !t.splitLines?.length
         ) {
-          if (t.expenseAmount > 0)
+          if (t.expenseAmount > 0) {
             byCategory.set(
               t.category,
               (byCategory.get(t.category) ?? 0) + t.expenseAmount,
             );
+            addCategoryDetail(t.category, t, t.expenseAmount);
+          }
           return;
         }
         if (t.splitLines?.length) {
           t.splitLines
             .filter((line) => line.excludedFromReports !== true)
-            .forEach((line) =>
+            .forEach((line) => {
               byCategory.set(
                 line.category,
                 (byCategory.get(line.category) ?? 0) + line.amount,
-              ),
-            );
+              );
+              addCategoryDetail(line.category, t, line.amount);
+            });
         } else
-          byCategory.set(
-            t.category,
-            (byCategory.get(t.category) ?? 0) + t.amount,
-          );
+          {
+            byCategory.set(
+              t.category,
+              (byCategory.get(t.category) ?? 0) + t.amount,
+            );
+            addCategoryDetail(t.category, t, t.type === "debt_payment" && t.expenseAmount !== undefined ? t.expenseAmount : t.amount);
+          }
       });
     filtered
       .filter((t) => t.type === "refund")
-      .forEach((t) =>
+      .forEach((t) => {
+        const refundAmount = transactionCategoryAmount(t, t.category);
         byCategory.set(
           t.category,
-          Math.max(
-            0,
-            (byCategory.get(t.category) ?? 0) -
-              transactionCategoryAmount(t, t.category),
-          ),
-        ),
-      );
+          Math.max(0, (byCategory.get(t.category) ?? 0) - refundAmount),
+        );
+        if (refundAmount > 0) addCategoryDetail(t.category, t, -refundAmount);
+      });
     // const months = Array.from({ length: 6 }, (_, i) => {
     //   const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
     //   const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -187,6 +215,12 @@ export default function ReportsPage() {
       expense,
       net: cashIn - cashOut,
       categories: [...byCategory.entries()].sort((a, b) => b[1] - a[1]),
+      categoryDetails: Object.fromEntries(
+        [...categoryDetails.entries()].map(([name, rows]) => [
+          name,
+          rows.sort((a, b) => b.date.localeCompare(a.date)),
+        ]),
+      ),
       forecast,
       anomalies,
       refunds,
@@ -233,7 +267,19 @@ export default function ReportsPage() {
             }}
           >
             <option value="all">Semua periode</option>
-            <option value="month">Bulan ini</option>
+            {availablePeriods.map((key) => {
+              const [year, month] = key.split("-");
+              const label = new Date(Number(year), Number(month) - 1, 1)
+                .toLocaleDateString("id-ID", {
+                  month: "long",
+                  year: "numeric",
+                });
+              return (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              );
+            })}
           </select>
           <button className="secondary-btn" onClick={exportReport}>
             <Download size={14} /> CSV
@@ -275,26 +321,41 @@ export default function ReportsPage() {
             </div>
           ) : (
             report.categories.map(([name, amount]) => (
-              <div key={name} style={{ marginBottom: 17 }}>
-                <div
+              <div key={name} style={{ marginBottom: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory((current) => current === name ? null : name)}
+                  aria-expanded={selectedCategory === name}
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 10,
-                    fontSize: 12,
-                    marginBottom: 8,
+                    display: "block", width: "100%", textAlign: "left",
+                    padding: "8px 0", border: 0, background: "transparent",
+                    color: "inherit", cursor: "pointer",
                   }}
                 >
-                  <span>{name}</span>
-                  <strong>{money(amount)}</strong>
-                </div>
-                <div className="progress">
-                  <span
-                    style={{
-                      width: `${report.expense ? Math.max(0, (amount / report.expense) * 100) : 0}%`,
-                    }}
-                  />
-                </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 12, marginBottom: 8 }}>
+                    <span style={{ fontWeight: 650 }}>{name} <span className="muted">{selectedCategory === name ? "−" : "＋"}</span></span>
+                    <strong>{money(amount)}</strong>
+                  </div>
+                  <div className="progress">
+                    <span style={{ width: `${report.expense ? Math.max(0, (amount / report.expense) * 100) : 0}%` }} />
+                  </div>
+                </button>
+                {selectedCategory === name && (
+                  <div style={{ marginTop: 8, padding: 12, borderRadius: 10, background: "#f8faf9", border: "1px solid #e8eeea" }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Rincian transaksi · {name}</div>
+                    {(report.categoryDetails[name] ?? []).length === 0 ? (
+                      <div className="muted" style={{ fontSize: 12 }}>Tidak ada rincian transaksi.</div>
+                    ) : (report.categoryDetails[name] ?? []).map((item) => (
+                      <div key={`${item.id}-${item.amount}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "9px 0", borderBottom: "1px solid #e7ece9", fontSize: 12 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 650, overflowWrap: "anywhere" }}>{item.description}</div>
+                          <div className="muted">{new Date(item.date).toLocaleDateString("id-ID")} · {item.type === "refund" ? "Pengembalian" : "Pengeluaran"}</div>
+                        </div>
+                        <strong style={{ whiteSpace: "nowrap", color: item.amount < 0 ? "#187343" : "inherit" }}>{item.amount < 0 ? "−" : ""}{money(Math.abs(item.amount))}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))
           )}
