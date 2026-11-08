@@ -105,46 +105,19 @@ export default function BudgetPage() {
 
   return (
     <>
-      <section
-        className="card"
-        style={{
-          marginBottom: 18,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={{ minWidth: 0 }}>
-          <div className="metric-label">Total Budget Bulanan</div>
+      <div className="budget-summary-grid" style={{ marginBottom: 18 }}>
+        <section className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+            <div className="metric-label">Total Budget Bulanan</div>
+            <Wallet size={19} color="#187443" />
+          </div>
           <div className="metric-value" style={{ marginTop: 6 }}>
             {budgetsReady ? formatIDR(budgetSummary.totalBudget) : "Memuat…"}
           </div>
           <div className="muted" style={{ fontSize: 12, marginTop: 5 }}>
             Total limit dari seluruh kategori budget yang tersimpan.
           </div>
-        </div>
-        <div
-          aria-hidden="true"
-          style={{
-            width: 42,
-            height: 42,
-            flex: "0 0 42px",
-            borderRadius: 12,
-            background: "#eef4f0",
-            color: "#187443",
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
-          <Wallet size={20} />
-        </div>
-      </section>
-      <div
-        className="metric-grid"
-        style={{ marginBottom: 18 }}
-      >
+        </section>
         <section className="card">
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
             <div className="metric-label">Budget Terpakai · Bulan Ini</div>
