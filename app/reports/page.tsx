@@ -234,16 +234,30 @@ export default function ReportsPage() {
     ledgerEntries,
   );
   const exportReport = () => {
-    const csv = [
-      "Kategori,Nominal",
-      ...report.categories.map(([n, a]) => `"${n.replaceAll('"', '""')}",${a}`),
-    ].join("\r\n");
-    const url = URL.createObjectURL(
-      new Blob([csv], { type: "text/csv;charset=utf-8;" }),
-    );
+    const escapeCsv = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+    const rows: string[] = [
+      "RINGKASAN PER KATEGORI",
+      "Kategori,Total Pengeluaran",
+      ...report.categories.map(([name, amount]) => `${escapeCsv(name)},${amount}`),
+      "",
+      "DETAIL TRANSAKSI",
+      "Tanggal,Kategori,Deskripsi,Jenis,Nominal",
+    ];
+    const detailRows = Object.entries(report.categoryDetails as Record<string, Array<{id:string;date:string;description:string;amount:number;type:string}>>)
+      .flatMap(([category, items]) => items.map(item => ({ category, ...item })))
+      .sort((a,b) => b.date.localeCompare(a.date));
+    rows.push(...detailRows.map(item => [
+      escapeCsv(new Date(item.date).toLocaleDateString("id-ID")),
+      escapeCsv(item.category),
+      escapeCsv(item.description),
+      escapeCsv(item.type === "refund" ? "Refund" : item.type),
+      item.amount,
+    ].join(",")));
+    const csv = rows.join("\r\n");
+    const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = "finwise-report.csv";
+    a.download = `finwise-report-${period === "all" ? "all-periods" : period}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

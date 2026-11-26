@@ -19,6 +19,7 @@ export default function Page() {
             "Deposito",
             "Investasi",
             "Kartu kredit",
+            "Bisnis",
           ],
           required: true,
         },
