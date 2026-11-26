@@ -244,7 +244,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const nav = (
     <>
       <div className="brand">
-        <div className="brand-mark">F</div>
+        <img src="/icons/finwise.png" alt="Finwise" className="brand-mark" />
         <div>
           finwise<span style={{ color: "#9aa19d", fontWeight: 500 }}>.</span>
         </div>

@@ -63,10 +63,9 @@ button {
 }
 
 .brand-mark {
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   border-radius: 11px;
-  background: #14291f;
   color: #fff;
   display: grid;
   place-items: center;
@@ -641,7 +640,7 @@ textarea {
   box-sizing: border-box;
 }
 
-.transaction-attachment-card > label {
+.transaction-attachment-card>label {
   display: block;
   margin: 0;
   font-size: 13px;
@@ -649,7 +648,7 @@ textarea {
   line-height: 1.4;
 }
 
-.transaction-attachment-card > div {
+.transaction-attachment-card>div {
   min-width: 0;
 }
 
@@ -696,7 +695,7 @@ textarea {
     gap: 10px;
   }
 
-  .transaction-attachment-card > div {
+  .transaction-attachment-card>div {
     display: flex;
     align-items: stretch;
     flex-wrap: wrap;
